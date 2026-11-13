@@ -1,0 +1,33 @@
+[
+  {
+    "code": "NGSS-5-PS2-1",
+    "title": "Gravitational Force",
+    "description": "Support an argument that the gravitational force exerted by Earth on objects is directed downward toward the center of the planet."
+  },
+  {
+    "code": "NGSS-3-5-ETS1-1",
+    "title": "Engineering Design Definition",
+    "description": "Define a simple design problem reflecting a need or a want that includes specified criteria for success and constraints on materials, time, or cost."
+  },
+  {
+    "code": "NGSS-3-5-ETS1-2",
+    "title": "Engineering Design Solutions",
+    "description": "Generate and compare multiple possible solutions to a problem based on how well each is likely to meet the criteria and constraints of the problem."
+  },
+  {
+    "code": "NGSS-3-5-ETS1-3",
+    "title": "Testing and Iterative Refinement",
+    "description": "Plan and carry out fair tests in which variables are controlled and failure points are considered to identify aspects of a model or prototype that can be improved."
+  },
+  {
+    "code": "NGSS-1-ESS1-1",
+    "title": "Earth and the Solar System",
+    "description": "Use observations of the sun, moon, and stars to describe patterns that can be predicted."
+  },
+  {
+    "code": "CSTA-1B-AP-10",
+    "title": "Algorithms and Sequences",
+    "description": "Create programs with sequences and simple loops to express ideas or address a problem."
+  }
+]
+

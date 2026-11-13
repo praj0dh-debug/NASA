@@ -1,0 +1,122 @@
+{
+  "missionId": "rocket-launch",
+  "name": "Artemis Falcon Orbital Flight",
+  "targetAltitudeKm": 250,
+  "minOrbitalVelocityKps": 7.8,
+  "gravityEarth": 9.81,
+  "atmosphericScaleHeightKm": 8.5,
+  "components": {
+    "capsules": [
+      {
+        "id": "orion-crew",
+        "name": "Orion 4-Astronaut Capsule",
+        "massKg": 9300,
+        "dragCoeff": 0.28,
+        "crew": 4,
+        "description": "Pressurized capsule with heat shield and life support. Safe for human cadets."
+      },
+      {
+        "id": "science-probe",
+        "name": "Deep Space Satellite Core",
+        "massKg": 3200,
+        "dragCoeff": 0.18,
+        "crew": 0,
+        "description": "Ultra-light robotic science bay. Maximum acceleration potential."
+      },
+      {
+        "id": "cargo-fairing",
+        "name": "Heavy Lunar Cargo Shell",
+        "massKg": 14000,
+        "dragCoeff": 0.35,
+        "crew": 0,
+        "description": "Carries lunar rover chassis and solar panels. Requires massive thrust."
+      }
+    ],
+    "tanks": [
+      {
+        "id": "tank-compact",
+        "name": "Composite Hydrolox Tank (Small)",
+        "fuelKg": 45000,
+        "dryMassKg": 4200,
+        "burnSeconds": 35,
+        "description": "Lightweight carbon-fiber construction. Fast burns for light payloads."
+      },
+      {
+        "id": "tank-standard",
+        "name": "Cryogenic Dual-Stage Tank (Medium)",
+        "fuelKg": 115000,
+        "dryMassKg": 9500,
+        "burnSeconds": 60,
+        "description": "NASA standard liquid oxygen & methane tank. Balanced thrust-to-weight."
+      },
+      {
+        "id": "tank-heavy",
+        "name": "Super-Heavy Booster Core (Large)",
+        "fuelKg": 240000,
+        "dryMassKg": 18000,
+        "burnSeconds": 90,
+        "description": "Massive propellant capacity designed for deep space orbital insertion."
+      }
+    ],
+    "engines": [
+      {
+        "id": "engine-cluster",
+        "name": "Raptor-X Tri-Engine Cluster",
+        "thrustKn": 6600,
+        "fuelConsumptionRateKgPerSec": 2200,
+        "isp": 350,
+        "description": "Clean-burning staged combustion engines with high efficiency."
+      },
+      {
+        "id": "engine-solid",
+        "name": "Dual Solid Rocket Boosters",
+        "thrustKn": 9800,
+        "fuelConsumptionRateKgPerSec": 3500,
+        "isp": 280,
+        "description": "Extreme raw liftoff punch to break past dense sea-level atmosphere."
+      },
+      {
+        "id": "engine-aerospike",
+        "name": "Altitude Compensating Aerospike",
+        "thrustKn": 4800,
+        "fuelConsumptionRateKgPerSec": 1400,
+        "isp": 410,
+        "description": "Highest efficiency in vacuum and upper atmosphere, steady gentle burn."
+      }
+    ]
+  },
+  "quiz": [
+    {
+      "id": "q1",
+      "question": "What primary force pulls the rocket back toward Earth until thrust exceeds weight?",
+      "options": ["Gravity", "Solar Radiation", "Centrifugal Force", "Magnetic Field"],
+      "correctIndex": 0,
+      "explanation": "Gravity pulls every object toward Earth's center at ~9.8 m/s²."
+    },
+    {
+      "id": "q2",
+      "question": "According to Newton's Third Law, how does a rocket engine propel the craft forward?",
+      "options": [
+        "By pushing against the launch tower",
+        "By expelling high-speed exhaust gas downward, creating an equal upward thrust",
+        "By suction created in the vacuum of space",
+        "By reflecting light off the rocket skin"
+      ],
+      "correctIndex": 1,
+      "explanation": "For every action, there is an equal and opposite reaction! Hot expanding gas exiting downward pushes the rocket upward."
+    },
+    {
+      "id": "q3",
+      "question": "Why do rockets shed empty fuel tanks during multistage launch?",
+      "options": [
+        "To make room for astronauts to walk outside",
+        "To discard dead weight so remaining fuel can accelerate the craft much faster",
+        "Because tanks rust instantly in high altitude",
+        "To signal ground control with a flash"
+      ],
+      "correctIndex": 1,
+      "explanation": "Carrying heavy empty tanks wastes fuel. Shedding dead mass increases the Thrust-to-Weight Ratio drastically!"
+    }
+  ]
+}
+

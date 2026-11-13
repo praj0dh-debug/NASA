@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-space-950 text-slate-100 font-sans antialiased min-h-screen selection:bg-sky-500 selection:text-space-950;
+    overflow-x: hidden;
+  }
+}
+
+/* Accessibility: Text Scaling */
+html.text-size-large {
+  font-size: 115%;
+}
+
+html.text-size-xl {
+  font-size: 130%;
+}
+
+/* Accessibility: High Contrast Mode */
+html.a11y-high-contrast {
+  filter: contrast(125%);
+}
+
+html.a11y-high-contrast button {
+  border-width: 2px !important;
+}
+
+html.a11y-high-contrast div {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Accessibility: Colorblind Assistance Patterns */
+html.a11y-colorblind .border-emerald-500,
+html.a11y-colorblind .border-emerald-400 {
+  border-style: solid;
+  border-color: #009E73 !important; /* Okabe-Ito Bluish Green */
+}
+
+html.a11y-colorblind .border-rose-500,
+html.a11y-colorblind .border-rose-400 {
+  border-style: dashed;
+  border-color: #D55E00 !important; /* Okabe-Ito Vermilion */
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050714;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+

@@ -1,0 +1,57 @@
+[
+  {
+    "id": "rocket-engineer",
+    "missionId": "rocket-launch",
+    "label": "Master Rocket Engineer",
+    "description": "Constructed a balanced multistage rocket, surmounted Earth gravity, and achieved orbital insertion.",
+    "icon": "Flame",
+    "gradient": "from-amber-400 to-red-500",
+    "criteria": "Complete Rocket Launch simulation with score >= 70"
+  },
+  {
+    "id": "station-commander",
+    "missionId": "space-station",
+    "label": "ISS Flight Director",
+    "description": "Successfully balanced electrical bus loads, oxygen generators, and microgravity research racks.",
+    "icon": "Award",
+    "gradient": "from-cyan-400 to-blue-600",
+    "criteria": "Complete Space Station Ops simulation with score >= 70"
+  },
+  {
+    "id": "lunar-geologist",
+    "missionId": "lunar-exploration",
+    "label": "Artemis Field Geologist",
+    "description": "Built pressurized regolith habitats and discovered water-ice crystals in permanently shadowed craters.",
+    "icon": "Compass",
+    "gradient": "from-indigo-400 to-purple-600",
+    "criteria": "Complete Lunar Exploration simulation with score >= 70"
+  },
+  {
+    "id": "rover-navigator",
+    "missionId": "mars-rover-code",
+    "label": "Mars Rover Programmer",
+    "description": "Engineered autonomous block instructions to guide Perseverance across treacherous Jezero sand dunes.",
+    "icon": "Terminal",
+    "gradient": "from-orange-400 to-rose-600",
+    "criteria": "Complete Mars Rover Code simulation with score >= 70"
+  },
+  {
+    "id": "orbit-architect",
+    "missionId": "satellite-design",
+    "label": "Earth Systems Architect",
+    "description": "Constructed a multi-spectral Earth observer satellite and synced low-Earth polar telemetry downlinks.",
+    "icon": "Radio",
+    "gradient": "from-emerald-400 to-teal-600",
+    "criteria": "Complete Satellite Design simulation with score >= 70"
+  },
+  {
+    "id": "planetary-defender",
+    "missionId": "asteroid-deflection",
+    "label": "Planetary Defense Officer",
+    "description": "Calculated kinetic intercept vectors to deflect a near-Earth hazardous asteroid, saving the planet.",
+    "icon": "ShieldCheck",
+    "gradient": "from-purple-400 to-pink-600",
+    "criteria": "Complete Asteroid Deflection simulation with score >= 70"
+  }
+]
+
