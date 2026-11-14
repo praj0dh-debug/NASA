@@ -1,6 +1,13 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { RotateCcw, ArrowRight, Zap, Sparkles, Flame, ArrowLeft } from 'lucide-react';
-import { RocketConfig, FlightTelemetry, stepRocketSimulationAdvanced, getIdealPitch } from './rocketPhysics';
+import { RotateCcw, ArrowRight, Zap, Sparkles, Flame, ArrowLeft, ArrowUp, ArrowDown, Gauge, Wind, Shield } from 'lucide-react';
+import {
+  RocketConfig,
+  FlightTelemetry,
+  stepRocketSimulationAdvanced,
+  getIdealPitch,
+  G0,
+  calculateRocketMass
+} from './rocketPhysics';
 import configData from './config.json';
 import { Button } from '../../components/common/Button';
 import { soundEffects } from '../../lib/soundEffects';
@@ -52,6 +59,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
   const [success, setSuccess] = useState(false);
   const [stagingTriggered, setStagingTriggered] = useState(false);
   const [scoreStars, setScoreStars] = useState(0);
+  const [throttle, setThrottle] = useState(1.0); // 0.0 to 1.0
 
   const capsule = configData.components.capsules.find(c => c.id === config.capsuleId)!;
   const tank = configData.components.tanks.find(t => t.id === config.tankId)!;
@@ -70,23 +78,35 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
   ];
   const beaconsRef = useRef<StarBeacon[]>(initialBeacons);
 
+  const initialMass = calculateRocketMass(capsule, tank, tank.fuelKg, false);
+
   const initialTelemetry: FlightTelemetry = {
     timeSec: 0,
     altitudeM: 0,
-    velocityMps: 0,
     horizontalDistM: 0,
-    pitchDeg: 0,
+    velocityMps: 0,
+    velocityYMps: 0,
+    velocityXMps: 0,
     accelerationMps2: 0,
+    accelerationYMps2: 0,
+    accelerationXMps2: 0,
+    pitchDeg: 0,
+    massKg: initialMass,
+    fuelKg: tank.fuelKg,
     stage1FuelKg: tank.fuelKg * 0.65,
     stage2FuelKg: tank.fuelKg * 0.35,
     isStage1BurnedOut: false,
     isStageSeparated: false,
+    engineBurnedOut: false,
+    throttle: 1.0,
     thrustN: 0,
+    fuelFlowRateKgPerSec: 0,
+    gravityMps2: G0,
+    airDensityKgPm3: 1.225,
     dragN: 0,
     twr: 0,
     orbitAchieved: false,
     crashed: false,
-    engineBurnedOut: false,
     maxQPassed: false,
     mach1Passed: false,
     inCorridor: true,
@@ -164,7 +184,13 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
     }
   }, []);
 
-  // Direct keyboard steering handlers
+  const adjustThrottle = useCallback((target: number) => {
+    const clamped = Math.max(0.0, Math.min(1.0, target));
+    setThrottle(clamped);
+    throttleRef.current = clamped;
+  }, []);
+
+  // Keyboard handlers: [A]/[D] to steer, [W]/[S] for throttle, Space for staging
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isSimulating || isFinished) return;
@@ -172,10 +198,16 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
         steerRef.current = -1;
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
         steerRef.current = 1;
+      } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        adjustThrottle(throttleRef.current + 0.1);
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        adjustThrottle(throttleRef.current - 0.1);
       } else if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
         if (telRef.current.isStage1BurnedOut && !telRef.current.isStageSeparated) {
           triggerStageSeparation();
+        } else {
+          adjustThrottle(1.0);
         }
       }
     };
@@ -199,7 +231,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isSimulating, isFinished, triggerStageSeparation]);
+  }, [isSimulating, isFinished, triggerStageSeparation, adjustThrottle]);
 
   // Launch countdown timer
   useEffect(() => {
@@ -224,6 +256,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       ...initialTelemetry,
       stage1FuelKg: tank.fuelKg * 0.65,
       stage2FuelKg: tank.fuelKg * 0.35,
+      massKg: initialMass
     };
     telRef.current = freshTel;
     setTelemetry(freshTel);
@@ -232,12 +265,12 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
     setStagingTriggered(false);
     stagingRef.current = false;
     steerRef.current = 0;
+    setThrottle(1.0);
     throttleRef.current = 1.0;
     setIsFinished(false);
     setSuccess(false);
     setCountdown(3);
     setIsSimulating(false);
-    // Clear particles
     for (const p of particlePoolRef.current) {
       p.active = false;
     }
@@ -250,7 +283,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
     let animationFrameId: number;
     let lastTime = performance.now();
 
-    // Detached booster parts tracking
     const boosters: DetachedBooster[] = [];
     let shockwaveRadius = 0;
     let shockwaveActive = false;
@@ -427,7 +459,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.fill();
           } else {
             // Earth surface & Launch Pad 39B at Cape Canaveral
-            // Ground scrolls down as altitude increases
             const groundY = (rocketScreenY + 60) + (currentTel.altitudeM * 0.08);
             if (groundY < h + 180) {
               // Ocean blue water
@@ -469,7 +500,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
           // Trajectory Guidance Corridor Target
           const idealPitch = getIdealPitch(currentTel.altitudeM);
           const idealRad = (idealPitch * Math.PI) / 180;
-          const pitchError = Math.abs(currentTel.pitchDeg - idealPitch);
 
           // Corridor target reticle is placed 125px forward along the ideal pitch angle
           const corridorDist = 125;
@@ -563,10 +593,10 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             if (shockwaveRadius > 160) shockwaveActive = false;
           }
 
-          // Exhaust Fire & Smoke Plume
+          // Exhaust Fire & Smoke Plume (proportional to throttle and thrust)
           const hasFuel = (currentTel.isStageSeparated ? currentTel.stage2FuelKg : currentTel.stage1FuelKg) > 0;
-          if (currentTel.thrustN > 0 && hasFuel) {
-            const spawnCount = currentTel.isStageSeparated ? 2 : 4;
+          if (currentTel.thrustN > 0 && hasFuel && throttleRef.current > 0.05) {
+            const spawnCount = Math.round((currentTel.isStageSeparated ? 2 : 4) * throttleRef.current);
             const isUpper = currentTel.isStageSeparated;
             const exhaustCos = Math.cos(pitchRad);
             const exhaustSin = Math.sin(pitchRad);
@@ -576,7 +606,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
               const px = rocketScreenX - exhaustSin * nozzleOffset + (Math.random() - 0.5) * (isUpper ? 6 : 12);
               const py = rocketScreenY + exhaustCos * nozzleOffset + (Math.random() - 0.5) * 4;
 
-              const speed = Math.random() * 12 + 10;
+              const speed = (Math.random() * 12 + 10) * throttleRef.current;
               const pvx = -exhaustSin * speed + (Math.random() - 0.5) * 6;
               const pvy = exhaustCos * speed + (Math.random() - 0.5) * 4;
 
@@ -584,7 +614,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
                 ? Math.random() > 0.4 ? '#38BDF8' : '#818CF8'
                 : Math.random() > 0.35 ? '#F97316' : '#FBBF24';
 
-              spawnParticle(px, py, pvx, pvy, pColor, Math.random() * 7 + 4, 0.7);
+              spawnParticle(px, py, pvx, pvy, pColor, (Math.random() * 7 + 4) * throttleRef.current, 0.7);
             }
           }
 
@@ -620,7 +650,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.rotate(b.rot);
             ctx.fillStyle = '#64748B';
             ctx.fillRect(-4, -14, 8, 28);
-            // Booster nose
             ctx.fillStyle = '#E2E8F0';
             ctx.beginPath();
             ctx.moveTo(0, -20);
@@ -668,7 +697,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
           // Strapped Side Boosters (Stage 1)
           if (!currentTel.isStageSeparated) {
             ctx.fillStyle = '#E2E8F0';
-            // Left booster
             ctx.fillRect(-17, -8, 6, 38);
             ctx.beginPath();
             ctx.moveTo(-14, -16);
@@ -677,7 +705,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.closePath();
             ctx.fill();
 
-            // Right booster
             ctx.fillRect(11, -8, 6, 38);
             ctx.beginPath();
             ctx.moveTo(14, -16);
@@ -737,6 +764,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
 
   const s1Percent = (telemetry.stage1FuelKg / (tank.fuelKg * 0.65)) * 100;
   const s2Percent = (telemetry.stage2FuelKg / (tank.fuelKg * 0.35)) * 100;
+  const gForce = telemetry.gravityMps2 > 0 ? (telemetry.accelerationMps2 / G0) : 0;
 
   return (
     <div className="bg-[#12153f]/90 border border-[#2e336d]/70 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl space-y-6 animate-fadeIn">
@@ -745,10 +773,10 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
         <div>
           <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
             <Flame className="w-4 h-4 fill-amber-400" />
-            LIVE FLIGHT DECK — ACTIVE STEERING CONTROLS
+            NEWTONIAN FLIGHT DYNAMICS — ACTIVE CONTROLS
           </span>
           <h3 className="text-lg font-black text-white font-display">
-            Artemis Launch Vehicle Flight Guidance
+            Artemis Launch Vehicle Flight Simulator
           </h3>
         </div>
 
@@ -769,163 +797,264 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       {/* Viewport and Flight Instrument Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main Canvas Viewport (8 cols) */}
-        <div className="lg:col-span-8 relative w-full aspect-[16/10] max-h-[480px] rounded-3xl overflow-hidden border-2 border-slate-700/80 bg-space-950 shadow-inner flex items-center justify-center">
-          <canvas
-            ref={canvasRef}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
-            className="w-full h-full object-contain block"
-          />
+        <div className="lg:col-span-8 space-y-3">
+          <div className="relative w-full aspect-[16/10] max-h-[480px] rounded-3xl overflow-hidden border-2 border-slate-700/80 bg-space-950 shadow-inner flex items-center justify-center">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              className="w-full h-full object-contain block"
+            />
 
-          {/* On-Screen Steering & Staging Controls (Direct Arcade Buttons) */}
-          {isSimulating && !isFinished && (
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto gap-2">
-              {/* Steer Left Button */}
-              <button
-                onMouseDown={() => { steerRef.current = -1; }}
-                onMouseUp={() => { steerRef.current = 0; }}
-                onTouchStart={() => { steerRef.current = -1; }}
-                onTouchEnd={() => { steerRef.current = 0; }}
-                className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">PITCH UP [A]</span>
-              </button>
-
-              {/* Stage Separation Button (Flashes when Stage 1 is burned out) */}
-              {telemetry.isStage1BurnedOut && !telemetry.isStageSeparated ? (
+            {/* On-Screen Steering & Staging Controls */}
+            {isSimulating && !isFinished && (
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto gap-2">
+                {/* Steer Left Button */}
                 <button
-                  onClick={triggerStageSeparation}
-                  className="px-4 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-black rounded-2xl border-2 border-yellow-300 animate-bounce shadow-xl flex items-center gap-2 select-none cursor-pointer text-xs sm:text-sm"
+                  onMouseDown={() => { steerRef.current = -1; }}
+                  onMouseUp={() => { steerRef.current = 0; }}
+                  onTouchStart={() => { steerRef.current = -1; }}
+                  onTouchEnd={() => { steerRef.current = 0; }}
+                  className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
-                  <span>DETACH BOOSTERS (SPACE)</span>
+                  <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">PITCH UP [A]</span>
                 </button>
-              ) : (
-                <div className="text-[10px] sm:text-[11px] font-mono text-slate-300 bg-black/70 px-3 py-1.5 rounded-xl backdrop-blur-md border border-slate-700/80 text-center">
-                  Use <span className="text-amber-300 font-bold">[A]</span> / <span className="text-amber-300 font-bold">[D]</span> or Arrow Keys to steer into green corridor
-                </div>
-              )}
 
-              {/* Steer Right Button */}
+                {/* Stage Separation Button */}
+                {telemetry.isStage1BurnedOut && !telemetry.isStageSeparated ? (
+                  <button
+                    onClick={triggerStageSeparation}
+                    className="px-4 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-black rounded-2xl border-2 border-yellow-300 animate-bounce shadow-xl flex items-center gap-2 select-none cursor-pointer text-xs sm:text-sm"
+                  >
+                    <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                    <span>DETACH BOOSTERS (SPACE)</span>
+                  </button>
+                ) : (
+                  <div className="text-[10px] sm:text-[11px] font-mono text-slate-300 bg-black/70 px-3 py-1.5 rounded-xl backdrop-blur-md border border-slate-700/80 text-center">
+                    Steer <span className="text-amber-300 font-bold">[A]</span>/<span className="text-amber-300 font-bold">[D]</span> • Throttle <span className="text-sky-300 font-bold">[W]</span>/<span className="text-sky-300 font-bold">[S]</span>
+                  </div>
+                )}
+
+                {/* Steer Right Button */}
+                <button
+                  onMouseDown={() => { steerRef.current = 1; }}
+                  onMouseUp={() => { steerRef.current = 0; }}
+                  onTouchStart={() => { steerRef.current = 1; }}
+                  onTouchEnd={() => { steerRef.current = 0; }}
+                  className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
+                >
+                  <span className="hidden sm:inline">PITCH RIGHT [D]</span>
+                  <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Countdown Overlay */}
+            {countdown !== null && (
+              <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-white backdrop-blur-sm z-20">
+                <div className="text-xs font-mono uppercase tracking-widest text-sky-400 mb-2">
+                  MAIN PROPULSION T-MINUS
+                </div>
+                <div className="text-7xl sm:text-8xl font-black font-display text-amber-400 animate-ping">
+                  {countdown === 0 ? 'LIFTOFF' : countdown}
+                </div>
+                <p className="text-xs text-slate-300 mt-4">Steer with [A] and [D] into the green corridor reticle!</p>
+              </div>
+            )}
+
+            {/* End Simulation Modal Overlay */}
+            {isFinished && (
+              <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
+                {success ? (
+                  <div className="space-y-4 max-w-md animate-fadeIn">
+                    <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-emerald-500/20">
+                      ⭐
+                    </div>
+                    <h4 className="text-2xl font-black text-white font-display">
+                      ORBITAL INSERTION ACHIEVED!
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Cadet reached {(telemetry.altitudeM / 1000).toFixed(0)} km apogee at {telemetry.velocityMps.toFixed(0)} m/s! You gathered {scoreStars || telemetry.starsCollected} telemetry stars and maintained flight path alignment.
+                    </p>
+                    <Button
+                      onClick={handleFinishDebrief}
+                      variant="bean"
+                      size="lg"
+                      icon={<ArrowRight className="w-5 h-5" />}
+                    >
+                      Proceed to Scientific Debrief
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-w-md animate-fadeIn">
+                    <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-amber-500/20">
+                      🪂
+                    </div>
+                    <h4 className="text-2xl font-black text-white font-display">
+                      SUB-ORBITAL OCEAN SPLASHDOWN
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      The capsule deployed parachutes and splashed down safely! Altitude reached: {(telemetry.altitudeM / 1000).toFixed(0)} km. Steer into the green corridor reticle and separate Stage 1 boosters when empty to reach orbit!
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Button onClick={handleFlyAgain} variant="bean" icon={<RotateCcw className="w-4 h-4" />}>
+                        Fly Again
+                      </Button>
+                      <Button onClick={onRestart} variant="secondary">
+                        Change Booster Build
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Interactive Throttle Bar */}
+          <div className="bg-[#0e1030]/90 border border-[#2e336d]/70 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <Flame className="w-4 h-4 text-amber-400" />
+              <span className="text-slate-300 font-bold">THROTTLE:</span>
+              <span className="text-amber-400 font-black text-sm">{Math.round(throttle * 100)}%</span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
-                onMouseDown={() => { steerRef.current = 1; }}
-                onMouseUp={() => { steerRef.current = 0; }}
-                onTouchStart={() => { steerRef.current = 1; }}
-                onTouchEnd={() => { steerRef.current = 0; }}
-                className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
+                onClick={() => adjustThrottle(0.0)}
+                className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                  throttle === 0 ? 'bg-rose-500/30 text-rose-300 border-rose-400' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                }`}
               >
-                <span className="hidden sm:inline">PITCH RIGHT [D]</span>
-                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                0% CUT
+              </button>
+              <button
+                onClick={() => adjustThrottle(0.5)}
+                className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                  throttle === 0.5 ? 'bg-amber-500/30 text-amber-300 border-amber-400' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                }`}
+              >
+                50% CRUISE
+              </button>
+              <button
+                onClick={() => adjustThrottle(1.0)}
+                className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                  throttle === 1.0 ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                }`}
+              >
+                100% MAX
               </button>
             </div>
-          )}
 
-          {/* Countdown Overlay */}
-          {countdown !== null && (
-            <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-white backdrop-blur-sm z-20">
-              <div className="text-xs font-mono uppercase tracking-widest text-sky-400 mb-2">
-                MAIN PROPULSION T-MINUS
-              </div>
-              <div className="text-7xl sm:text-8xl font-black font-display text-amber-400 animate-ping">
-                {countdown === 0 ? 'LIFTOFF' : countdown}
-              </div>
-              <p className="text-xs text-slate-300 mt-4">Steer with [A] and [D] into the green corridor ring!</p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => adjustThrottle(throttle - 0.1)}
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                title="Decrease Throttle [S]"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => adjustThrottle(throttle + 0.1)}
+                className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                title="Increase Throttle [W]"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
             </div>
-          )}
-
-          {/* End Simulation Modal Overlay */}
-          {isFinished && (
-            <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
-              {success ? (
-                <div className="space-y-4 max-w-md animate-fadeIn">
-                  <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-emerald-500/20">
-                    ⭐
-                  </div>
-                  <h4 className="text-2xl font-black text-white font-display">
-                    ORBITAL INSERTION ACHIEVED!
-                  </h4>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Cadet reached {(telemetry.altitudeM / 1000).toFixed(0)} km apogee at {telemetry.velocityMps.toFixed(0)} m/s! You gathered {scoreStars || telemetry.starsCollected} telemetry stars and maintained flight path alignment.
-                  </p>
-                  <Button
-                    onClick={handleFinishDebrief}
-                    variant="bean"
-                    size="lg"
-                    icon={<ArrowRight className="w-5 h-5" />}
-                  >
-                    Proceed to Scientific Debrief
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4 max-w-md animate-fadeIn">
-                  <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-amber-500/20">
-                    🪂
-                  </div>
-                  <h4 className="text-2xl font-black text-white font-display">
-                    SUB-ORBITAL OCEAN SPLASHDOWN
-                  </h4>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    The capsule deployed parachutes and splashed down safely! Altitude reached: {(telemetry.altitudeM / 1000).toFixed(0)} km. Steer into the green corridor reticle and separate Stage 1 boosters when empty to reach orbit!
-                  </p>
-                  <div className="flex gap-3 justify-center">
-                    <Button onClick={handleFlyAgain} variant="bean" icon={<RotateCcw className="w-4 h-4" />}>
-                      Fly Again
-                    </Button>
-                    <Button onClick={onRestart} variant="secondary">
-                      Change Booster Build
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
 
-        {/* Real-Time Flight Gauges (4 cols) */}
+        {/* Real-Time Physics Telemetry Gauges (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-[#0e1030]/90 border border-[#2e336d]/70 rounded-3xl p-5 space-y-4 backdrop-blur-xl">
-            <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center justify-between">
-              <span>Flight Telemetry</span>
+          <div className="bg-[#0e1030]/90 border border-[#2e336d]/70 rounded-3xl p-5 space-y-3.5 backdrop-blur-xl">
+            <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center justify-between pb-1 border-b border-slate-800">
+              <span className="flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5 text-sky-400" />
+                Live Physics Telemetry
+              </span>
               <span className={`text-[11px] font-bold ${telemetry.inCorridor ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {telemetry.inCorridor ? '✓ On Corridor' : '⚠ Off Corridor'}
               </span>
             </h4>
 
-            {/* Altitude Gauge */}
-            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
-              <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
-                <span>ALTITUDE</span>
-                <span className="text-sky-300 font-bold">ORBIT: 140 km</span>
+            {/* Altitude & Velocity Grid */}
+            <div className="grid grid-cols-2 gap-2 font-mono">
+              <div className="p-2.5 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
+                <div className="text-[10px] text-slate-400">ALTITUDE</div>
+                <div className="text-xl font-black text-white">
+                  {(telemetry.altitudeM / 1000).toFixed(1)} <span className="text-[10px] text-slate-400">km</span>
+                </div>
               </div>
-              <div className="text-2xl font-black font-mono text-white">
-                {(telemetry.altitudeM / 1000).toFixed(1)}{' '}
-                <span className="text-xs font-normal text-slate-400">km</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-2">
-                <div
-                  className="bg-sky-400 h-full transition-all duration-150"
-                  style={{ width: `${Math.min(100, (telemetry.altitudeM / 140000) * 100)}%` }}
-                />
+
+              <div className="p-2.5 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
+                <div className="text-[10px] text-slate-400">TOTAL SPEED</div>
+                <div className="text-xl font-black text-amber-400">
+                  {telemetry.velocityMps > 1000 ? `${(telemetry.velocityMps / 1000).toFixed(2)} km/s` : `${telemetry.velocityMps.toFixed(0)} m/s`}
+                </div>
               </div>
             </div>
 
-            {/* Velocity & Mach Number */}
-            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
-              <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
-                <span>VELOCITY</span>
-                <span className="text-emerald-400 font-bold">
-                  Mach {(telemetry.velocityMps / 343).toFixed(1)}
+            {/* 2D Vector Speeds (Vertical & Horizontal) */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">VERT SPEED (Vy)</span>
+                <span className="font-bold text-sky-300">{telemetry.velocityYMps.toFixed(0)} m/s</span>
+              </div>
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">HORIZ SPEED (Vx)</span>
+                <span className="font-bold text-emerald-300">{telemetry.velocityXMps.toFixed(0)} m/s</span>
+              </div>
+            </div>
+
+            {/* Acceleration & G-Force */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">ACCELERATION</span>
+                <span className="font-bold text-white">{telemetry.accelerationMps2.toFixed(1)} m/s²</span>
+              </div>
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">G-FORCE</span>
+                <span className="font-bold text-amber-300">{gForce.toFixed(2)} G</span>
+              </div>
+            </div>
+
+            {/* Rocket Mass & Thrust */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">TOTAL MASS</span>
+                <span className="font-bold text-purple-300">{(telemetry.massKg / 1000).toFixed(1)} tons</span>
+              </div>
+              <div className="p-2 bg-space-950/80 rounded-xl border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block">ENGINE THRUST</span>
+                <span className="font-bold text-amber-400">{(telemetry.thrustN / 1000).toFixed(0)} kN</span>
+              </div>
+            </div>
+
+            {/* Atmospheric Density, Drag, & Gravity */}
+            <div className="p-2.5 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800 space-y-1.5 text-[11px] font-mono">
+              <div className="flex justify-between text-slate-300">
+                <span className="flex items-center gap-1 text-slate-400">
+                  <Wind className="w-3 h-3 text-sky-400" />
+                  Air Density (ρ):
                 </span>
+                <span>{telemetry.airDensityKgPm3.toFixed(3)} kg/m³</span>
               </div>
-              <div className="text-2xl font-black font-mono text-amber-400">
-                {(telemetry.velocityMps / 1000).toFixed(2)}{' '}
-                <span className="text-xs font-normal text-slate-400">km/s</span>
+              <div className="flex justify-between text-slate-300">
+                <span className="flex items-center gap-1 text-slate-400">
+                  <Shield className="w-3 h-3 text-rose-400" />
+                  Drag Force (Fd):
+                </span>
+                <span>{(telemetry.dragN / 1000).toFixed(1)} kN</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400">Local Gravity (g):</span>
+                <span>{telemetry.gravityMps2.toFixed(2)} m/s²</span>
               </div>
             </div>
 
-            {/* Pitch Angle Indicator */}
-            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
+            {/* Pitch & Corridor Target */}
+            <div className="p-2.5 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
               <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
                 <span>PITCH ANGLE</span>
                 <span className="text-sky-400 font-bold">IDEAL: {getIdealPitch(telemetry.altitudeM).toFixed(0)}°</span>

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/api.test.mjs tests/physics.test.mjs tests/landing.test.mjs"
+    "test": "node --test tests/api.test.mjs tests/physics.test.mjs tests/landing.test.mjs tests/sim_integration.test.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

@@ -103,6 +103,54 @@
       "coppaConfirmed": true,
       "educationalConfirmed": true,
       "createdAt": "2026-11-14T07:25:35.041Z"
+    },
+    {
+      "id": "consent-1794642171851-7aoig",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:42:51.852Z"
+    },
+    {
+      "id": "consent-1794642301120-bvnkd",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:45:01.120Z"
+    },
+    {
+      "id": "consent-1794642416550-6u9mz",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:46:56.550Z"
+    },
+    {
+      "id": "consent-1794642439143-rs5dz",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:47:19.143Z"
+    },
+    {
+      "id": "consent-1794642456588-h2ste",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:47:36.588Z"
+    },
+    {
+      "id": "consent-1794642483431-lhktz",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:48:03.431Z"
     }
   ],
   "students": [
@@ -115,7 +163,7 @@
       "ageGroup": "8-10",
       "consentGranted": true,
       "parentEmail": "test.parent@flight-school.edu",
-      "missionsCompleted": 1,
+      "missionsCompleted": 2,
       "totalScore": 190,
       "badgesCount": 2,
       "currentMission": "Rocket Launch & Return",
@@ -234,9 +282,9 @@
     "cadet-nova-001": {
       "rocket-launch": {
         "missionId": "rocket-launch",
-        "status": "in_progress",
+        "status": "complete",
         "score": 92,
-        "attempts": 16,
+        "attempts": 25,
         "completedAt": "2026-11-14T06:55:41.532Z"
       },
       "space-station": {
@@ -250,7 +298,7 @@
         "missionId": "lunar-exploration",
         "status": "in_progress",
         "score": 0,
-        "attempts": 2
+        "attempts": 4
       },
       "mars-rover-code": {
         "missionId": "mars-rover-code",
