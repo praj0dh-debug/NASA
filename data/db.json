@@ -1,0 +1,210 @@
+{
+  "consents": [
+    {
+      "id": "consent-admin-01",
+      "email": "flight.director@nasa-stem.org",
+      "role": "teacher",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-01T00:00:00.000Z"
+    },
+    {
+      "id": "consent-1794619845103-8y76w",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T01:30:45.103Z"
+    },
+    {
+      "id": "consent-1794619996791-5tj41",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T01:33:16.791Z"
+    }
+  ],
+  "students": [
+    {
+      "id": "cadet-nova-001",
+      "nickname": "Cadet Nova",
+      "callsign": "NOVA-1",
+      "avatar": "🚀",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "parentEmail": "test.parent@flight-school.edu",
+      "missionsCompleted": 0,
+      "totalScore": 92,
+      "badgesCount": 2,
+      "currentMission": "Rocket Launch & Return",
+      "status": "active",
+      "lastActive": "Just now",
+      "standardsMastered": [
+        "NGSS-5-PS2-1",
+        "NGSS-3-5-ETS1-1"
+      ]
+    },
+    {
+      "id": "student-2",
+      "nickname": "Cadet Maya",
+      "callsign": "ORION-LEAD",
+      "avatar": "👩‍🚀",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "parentEmail": "maya.parent@example.com",
+      "missionsCompleted": 3,
+      "totalScore": 285,
+      "badgesCount": 3,
+      "currentMission": "Mars Rover Autonomous Coding",
+      "status": "active",
+      "lastActive": "4 mins ago",
+      "standardsMastered": [
+        "NGSS-5-PS2-1",
+        "NGSS-1-ESS1-1"
+      ]
+    },
+    {
+      "id": "student-3",
+      "nickname": "Cadet Leo",
+      "callsign": "PULSAR-7",
+      "avatar": "🚀",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "parentEmail": "leo.parent@example.com",
+      "missionsCompleted": 1,
+      "totalScore": 85,
+      "badgesCount": 1,
+      "currentMission": "Orbital Space Station Life Support",
+      "status": "stuck",
+      "lastActive": "8 mins ago",
+      "standardsMastered": [
+        "NGSS-5-PS2-1"
+      ]
+    },
+    {
+      "id": "student-4",
+      "nickname": "Cadet Liam",
+      "callsign": "COSMO-X",
+      "avatar": "🪐",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "parentEmail": "liam.parent@example.com",
+      "missionsCompleted": 5,
+      "totalScore": 480,
+      "badgesCount": 5,
+      "currentMission": "Planetary Defense DART Simulator",
+      "status": "active",
+      "lastActive": "12 mins ago",
+      "standardsMastered": [
+        "NGSS-5-PS2-1",
+        "NGSS-3-5-ETS1-1",
+        "NGSS-3-5-ETS1-2",
+        "NGSS-4-ESS3-2"
+      ]
+    },
+    {
+      "id": "student-5",
+      "nickname": "Cadet Zara",
+      "callsign": "LUNAR-FOX",
+      "avatar": "🤖",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "parentEmail": "zara.parent@example.com",
+      "missionsCompleted": 6,
+      "totalScore": 590,
+      "badgesCount": 6,
+      "currentMission": "Flight Academy Graduate",
+      "status": "completed",
+      "lastActive": "Yesterday",
+      "standardsMastered": [
+        "NGSS-5-PS2-1",
+        "NGSS-3-5-ETS1-1",
+        "NGSS-3-5-ETS1-2",
+        "NGSS-3-5-ETS1-3",
+        "NGSS-1-ESS1-1",
+        "CSTA-1B-AP-10"
+      ]
+    },
+    {
+      "id": "cadet-test-99",
+      "nickname": "Cadet Orion",
+      "callsign": "STAR-SEEKER",
+      "avatar": "👨‍🚀",
+      "classCode": "NASA-CADET-5A",
+      "ageGroup": "8-10",
+      "consentGranted": true,
+      "missionsCompleted": 0,
+      "totalScore": 0,
+      "badgesCount": 0,
+      "currentMission": "Rocket Launch & Return",
+      "status": "active",
+      "lastActive": "Just now",
+      "standardsMastered": [
+        "NGSS-5-PS2-1"
+      ]
+    }
+  ],
+  "progress": {
+    "cadet-nova-001": {
+      "rocket-launch": {
+        "missionId": "rocket-launch",
+        "status": "in_progress",
+        "score": 92,
+        "attempts": 9,
+        "completedAt": "2026-11-13T01:00:00.000Z"
+      },
+      "space-station": {
+        "missionId": "space-station",
+        "status": "in_progress",
+        "score": 0,
+        "attempts": 2
+      },
+      "lunar-exploration": {
+        "missionId": "lunar-exploration",
+        "status": "locked",
+        "score": 0,
+        "attempts": 0
+      },
+      "mars-rover-code": {
+        "missionId": "mars-rover-code",
+        "status": "locked",
+        "score": 0,
+        "attempts": 0
+      },
+      "satellite-design": {
+        "missionId": "satellite-design",
+        "status": "locked",
+        "score": 0,
+        "attempts": 0
+      },
+      "asteroid-deflection": {
+        "missionId": "asteroid-deflection",
+        "status": "locked",
+        "score": 0,
+        "attempts": 0
+      }
+    }
+  },
+  "badges": {
+    "cadet-nova-001": [
+      {
+        "badgeId": "rocket-engineer",
+        "earnedAt": "2026-11-13T01:00:00.000Z",
+        "missionId": "rocket-launch",
+        "score": 88
+      },
+      {
+        "badgeId": "station-commander",
+        "earnedAt": "2026-11-14T01:30:45.108Z",
+        "missionId": "space-station",
+        "score": 90
+      }
+    ]
+  }
+}

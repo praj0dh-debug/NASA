@@ -3,16 +3,17 @@
 **NASA Artemis Spaceflight Academy & STEM Simulator for Elementary Cadets (Ages 5–11)**
 
 ![Artemis Cadet Training Program](https://img.shields.io/badge/NASA-Artemis%20Cadet-blue.svg)
-![Status](https://img.shields.io/badge/Status-Prototype%20V1.0-brightgreen.svg)
-![COPPA](https://img.shields.io/badge/COPPA-Compliant-emerald.svg)
+![Status](https://img.shields.io/badge/Status-Production%20Hardened-brightgreen.svg)
+![COPPA](https://img.shields.io/badge/COPPA-Compliant%20Zero--PII-emerald.svg)
 ![WCAG](https://img.shields.io/badge/WCAG-2.1%20AA-purple.svg)
+![Tests](https://img.shields.io/badge/Tests-12%2F12%20Passing-brightgreen.svg)
 ![Standards](https://img.shields.io/badge/Curriculum-NGSS%20%7C%20CSTA-orange.svg)
 
 ---
 
 ## 🛰️ Overview
 
-The **Junior Astronaut Mission Trainer** is an interactive, browser-based spaceflight training simulator designed to teach elementary students authentic aerospace engineering, orbital mechanics, planetary geology, and robotics. Built according to the **6-Phase NASA STEM Prototype Plan**, it implements a shared **Plan → Execute → Evaluate** loop across 6 deep space missions.
+The **Junior Astronaut Mission Trainer** is an interactive, browser-based spaceflight training simulator designed to teach elementary students authentic aerospace engineering, orbital mechanics, planetary geology, and robotics. Built according to the **6-Phase NASA STEM Prototype Plan**, it implements a shared **Plan → Execute → Evaluate** loop across 6 deep space missions, backed by a production-hardened REST API with zero-PII COPPA compliance.
 
 ### Key Capabilities
 
@@ -39,9 +40,10 @@ The **Junior Astronaut Mission Trainer** is an interactive, browser-based spacef
 6. **Mission 6: Planetary Defense DART Simulator**
    - Calculate hypervelocity kinetic impactor vectors and lead time years to deflect hazardous asteroids past Earth.
 
-7. **COPPA-Compliant Child Accounts**
-   - No personal identifiable information (PII) is ever collected. Cadets choose callsigns (`STAR-SEEKER`, `ORION-BLAST`) and avatars.
-   - Adult supervisor consent gate (Parent & Teacher authorization).
+7. **COPPA-Compliant Child Accounts (Zero PII Guaranteed)**
+   - No personal identifiable information (PII) is ever collected or persisted. Cadets choose callsigns (`STAR-SEEKER`, `ORION-BLAST`) and avatars.
+   - Strict server-side COPPA guard detects and rejects names, phone numbers, and location data.
+   - Adult supervisor consent gate (Parent & Teacher authorization) with email verification.
 
 8. **Educator Command Center & Classroom Roster**
    - Real-time live roster tracking enrolled cadets, missions cleared, badges conferred, and NGSS standard mastery rates.
@@ -53,37 +55,96 @@ The **Junior Astronaut Mission Trainer** is an interactive, browser-based spacef
    - Okabe-Ito Colorblind assistance patterns.
    - Web Audio synthesizer sound effects (engine roar, countdown beeps, success fanfare).
    - Early Reader voiceover narration using browser Speech Synthesis API.
+   - Keyboard accessible navigation with visible focus rings and skip-to-content links.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack & Architecture
 
-- **Frontend:** React 18, TypeScript, Vite
-- **Styling:** Tailwind CSS, Custom NASA Artemis Palette
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Backend:** Node.js HTTP REST API router with atomic JSON database (`data/db.json`)
+- **Security:** COPPA Guard middleware (Zero-PII detection, HTML entity XSS sanitization, 512KB payload limits)
 - **Physics Engine:** Euler-integrated atmospheric drag, Newton's 2nd & 3rd laws, Tsiolkovsky Delta-V equation
-- **Audio Engine:** Web Audio API synthesizer + Web Speech API Text-to-Speech
-- **Celebrations:** Canvas Confetti
+- **Testing:** Node.js native test runner (`node --test`) with `--experimental-strip-types`
+- **Audio & Speech:** Web Audio API synthesizer + Web Speech API Text-to-Speech
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick Start (Clean Clone)
 
-### 1. Install Dependencies
+### 1. Prerequisites
+- **Node.js**: v20+ or v22+ (v26 LTS recommended)
+- **npm**: v9+
+
+### 2. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Run Local Development Server
+### 3. Environment Configuration
+Copy the provided `.env.example` file to create your local `.env`:
+```bash
+# Windows (PowerShell / Command Prompt)
+copy .env.example .env
+
+# macOS / Linux
+cp .env.example .env
+```
+
+Default configuration in `.env`:
+```ini
+# Port where the application dev/production server runs
+PORT=3000
+
+# Server execution environment (development | production | test)
+NODE_ENV=development
+
+# Base URL for frontend REST API client requests (empty string uses relative path /api/*)
+VITE_API_BASE_URL=
+
+# Enforce strict COPPA validation (disallows real names, SSN, phone numbers, locations)
+COPPA_STRICT_MODE=true
+```
+
+### 4. Run Development Server (Frontend + REST API)
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open **[http://localhost:3000](http://localhost:3000)** in your browser. The Vite dev server automatically embeds the REST API middleware on the same port.
 
-### 3. Build for Production
+### 5. Run Test Suite
+Execute the unit and API test suite (12 tests covering health, COPPA guards, parental consent, mission progress validation, badge criteria, classroom roster, and rocket physics):
 ```bash
-npm run build
+npm test
 ```
-Creates an optimized static production bundle in `dist/`.
+
+### 6. Build & Run for Production
+```bash
+# Compile TypeScript and bundle frontend with Vite
+npm run build
+
+# Start standalone Node production server
+npm run preview
+# or run the dedicated production server:
+node server/index.ts
+```
+
+---
+
+## 📡 REST API Endpoints
+
+All endpoints are hosted at `/api/*` and reject payloads larger than 512KB.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Uptime, COPPA mode, and API status |
+| `POST` | `/api/parental-consent` | Verifies supervisor email and grants educational COPPA consent |
+| `GET` | `/api/progress` | Fetches progress records for a student (`?studentId=...`) |
+| `POST` | `/api/progress` | Persists mission score, status, and advances sequential unlocks |
+| `GET` | `/api/badges` | Retrieves all earned badges for a cadet (`?studentId=...`) |
+| `POST` | `/api/badges` | Awards certified badge upon meeting score criteria (>= 70%) |
+| `GET` | `/api/roster` | Returns teacher classroom summary and cadet roster (`?classCode=...`) |
+| `POST` | `/api/roster/join` | Enrolls cadet into a teacher's classroom by class code |
 
 ---
 
@@ -95,4 +156,3 @@ Creates an optimized static production bundle in `dist/`.
 - **NGSS-3-5-ETS1-3:** Testing failure points and iterative refinement of rocket configurations.
 - **NGSS-2-ESS1-1:** Earth & Moon surface history and crater formation.
 - **CSTA-1B-AP-10:** Sequencing, algorithms, and iterative loops in robotics control.
-

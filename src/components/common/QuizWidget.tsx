@@ -27,6 +27,7 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [scoreList, setScoreList] = useState<boolean[]>([]);
   const [quizFinished, setQuizFinished] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const currentQuestion = questions[currentIndex];
 
@@ -37,7 +38,7 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
   };
 
   const handleCheckAnswer = () => {
-    if (selectedAnswer === null) return;
+    if (selectedAnswer === null || isAnswerSubmitted) return;
     const isCorrect = selectedAnswer === currentQuestion.correctIndex;
     setIsAnswerSubmitted(true);
     setScoreList(prev => [...prev, isCorrect]);
@@ -55,7 +56,8 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
       setSelectedAnswer(null);
       setIsAnswerSubmitted(false);
     } else {
-      // Quiz finished
+      if (isCompleting) return;
+      setIsCompleting(true);
       setQuizFinished(true);
       const totalCorrect = scoreList.filter(Boolean).length;
       const finalScore = Math.round((totalCorrect / questions.length) * 100);
@@ -69,19 +71,19 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
     const passed = finalScore >= 70;
 
     return (
-      <div className="bg-space-900/90 border border-slate-700 rounded-3xl p-8 max-w-xl mx-auto text-center shadow-2xl backdrop-blur-md">
+      <section aria-label="Debrief Assessment Results" className="bg-space-900/90 border border-slate-700 rounded-3xl p-8 max-w-xl mx-auto text-center shadow-2xl backdrop-blur-md">
         <div className={`w-20 h-20 mx-auto rounded-3xl flex items-center justify-center mb-6 shadow-xl ${
           passed ? 'bg-gradient-to-tr from-amber-400 to-yellow-300 text-slate-950' : 'bg-space-800 text-rose-400 border border-rose-500/30'
-        }`}>
+        }`} aria-hidden="true">
           {passed ? <Award className="w-10 h-10 animate-bounce" /> : <HelpCircle className="w-10 h-10" />}
         </div>
 
         <h3 className="text-2xl font-black text-white font-display mb-2">
           {passed ? "Mission Debrief Passed!" : "Telemetry Review Needed"}
         </h3>
-        <p className="text-slate-400 text-sm mb-6">
+        <p className="text-slate-300 text-sm mb-6">
           {passed
-            ? `Outstanding performance, Cadet! You scored ${finalScore}% and proved mastery of the mission's core science concepts.`
+            ? `Outstanding performance, Cadet! You scored ${finalScore}% and demonstrated mastery of the mission's core science concepts.`
             : `You scored ${finalScore}%. Review the science briefing and try the simulation once more to unlock your badge!`}
         </p>
 
@@ -96,12 +98,12 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
             <div className={`text-2xl font-mono font-bold ${passed ? 'text-amber-400' : 'text-rose-400'}`}>{finalScore}%</div>
           </div>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-space-900/90 border border-slate-700/80 rounded-3xl p-6 md:p-8 max-w-2xl mx-auto shadow-2xl backdrop-blur-md">
+    <section aria-label="Scientific Debrief Quiz" className="bg-space-900/90 border border-slate-700/80 rounded-3xl p-6 md:p-8 max-w-2xl mx-auto shadow-2xl backdrop-blur-md">
       {/* Quiz Header */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
         <div>
@@ -110,7 +112,7 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
           </span>
           <h3 className="text-lg font-bold text-slate-200 mt-0.5">{missionTitle} Review</h3>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5" aria-label={`Question progress indicator ${currentIndex + 1} of ${questions.length}`}>
           {questions.map((_, idx) => (
             <div
               key={idx}
@@ -134,7 +136,7 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
       </div>
 
       {/* Options */}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-6" role="radiogroup" aria-label="Answer choices">
         {currentQuestion.options.map((option, idx) => {
           let optionStyle = "bg-space-800/80 border-slate-700 text-slate-200 hover:border-slate-500 hover:bg-space-750";
 
@@ -153,6 +155,8 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
           return (
             <button
               key={idx}
+              role="radio"
+              aria-checked={selectedAnswer === idx}
               onClick={() => handleSelectOption(idx)}
               disabled={isAnswerSubmitted}
               className={`w-full text-left p-4 rounded-2xl border transition-all duration-150 flex items-center justify-between font-medium cursor-pointer ${optionStyle}`}
@@ -165,10 +169,10 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
               </div>
 
               {isAnswerSubmitted && idx === currentQuestion.correctIndex && (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" aria-label="Correct" />
               )}
               {isAnswerSubmitted && idx === selectedAnswer && idx !== currentQuestion.correctIndex && (
-                <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                <XCircle className="w-5 h-5 text-rose-400 shrink-0" aria-label="Incorrect" />
               )}
             </button>
           );
@@ -184,12 +188,12 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
         }`}>
           <div className="font-bold text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5">
             {selectedAnswer === currentQuestion.correctIndex ? (
-              <><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Correct Analysis!</>
+              <><CheckCircle2 className="w-4 h-4 text-emerald-400" aria-hidden="true" /> Correct Scientific Analysis!</>
             ) : (
-              <><XCircle className="w-4 h-4 text-rose-400" /> Scientific Correction</>
+              <><XCircle className="w-4 h-4 text-rose-400" aria-hidden="true" /> Scientific Clarification</>
             )}
           </div>
-          <p className="text-xs leading-relaxed opacity-90">{currentQuestion.explanation}</p>
+          <p className="text-xs leading-relaxed opacity-95">{currentQuestion.explanation}</p>
         </div>
       )}
 
@@ -207,13 +211,13 @@ export const QuizWidget: React.FC<QuizWidgetProps> = ({
           <Button
             onClick={handleNext}
             variant="primary"
+            disabled={isCompleting}
             icon={<ArrowRight className="w-4 h-4" />}
           >
             {currentIndex + 1 < questions.length ? "Next Question" : "Complete Debrief"}
           </Button>
         )}
       </div>
-    </div>
+    </section>
   );
 };
-

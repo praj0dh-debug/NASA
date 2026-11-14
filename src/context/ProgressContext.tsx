@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import missionsData from '../data/missions.index.json';
 import badgesData from '../data/badges.json';
+import { apiClient } from '../lib/apiClient';
+import { useUser } from './UserContext';
 
 export type MissionStatus = 'locked' | 'unlocked' | 'in_progress' | 'complete';
 
@@ -22,7 +24,9 @@ export interface EarnedBadge {
 interface ProgressContextType {
   progress: Record<string, MissionProgress>;
   badges: EarnedBadge[];
-  completeMission: (missionId: string, score: number) => { newlyEarnedBadge?: string; nextUnlockedMission?: string };
+  isLoading: boolean;
+  apiError: string | null;
+  completeMission: (missionId: string, score: number) => Promise<{ newlyEarnedBadge?: string; nextUnlockedMission?: string }>;
   startMission: (missionId: string) => void;
   resetProgress: () => void;
   unlockAllMissionsForDemo: () => void;
@@ -31,6 +35,7 @@ interface ProgressContextType {
   hasBadge: (badgeId: string) => boolean;
   totalXp: number;
   rankTitle: string;
+  refreshProgress: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'junior_astronaut_progress_v1';
@@ -48,6 +53,10 @@ const initialProgress: Record<string, MissionProgress> = {
 const ProgressContext = createContext<ProgressContextType | undefined>(undefined);
 
 export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { profile } = useUser();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
   const [progress, setProgress] = useState<Record<string, MissionProgress>>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -66,6 +75,7 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   });
 
+  // Local storage sync
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
   }, [progress]);
@@ -73,6 +83,40 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     localStorage.setItem(BADGES_KEY, JSON.stringify(badges));
   }, [badges]);
+
+  // Sync with real backend on load and profile change
+  const refreshProgress = useCallback(async () => {
+    if (!profile?.id) return;
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const [progRes, badgeRes] = await Promise.allSettled([
+        apiClient.getProgress(profile.id),
+        apiClient.getBadges(profile.id)
+      ]);
+
+      if (progRes.status === 'fulfilled' && progRes.value.progress) {
+        setProgress(prev => ({
+          ...prev,
+          ...progRes.value.progress
+        }));
+      }
+
+      if (badgeRes.status === 'fulfilled' && Array.isArray(badgeRes.value.badges)) {
+        setBadges(badgeRes.value.badges);
+      }
+    } catch (err) {
+      const error = err as Error;
+      setApiError(error.message || 'Unable to sync with telemetry server. Operating in offline flight recorder mode.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    refreshProgress();
+  }, [refreshProgress]);
 
   const getMissionStatus = (missionId: string): MissionStatus => {
     return progress[missionId]?.status || 'locked';
@@ -89,18 +133,25 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const startMission = (missionId: string) => {
     setProgress(prev => {
       const current = prev[missionId] || { missionId, status: 'unlocked', score: 0, attempts: 0 };
-      return {
+      const updated: Record<string, MissionProgress> = {
         ...prev,
         [missionId]: {
           ...current,
-          status: current.status === 'complete' ? 'complete' : 'in_progress',
+          status: (current.status === 'complete' ? 'complete' : 'in_progress') as MissionStatus,
           attempts: current.attempts + 1
         }
       };
+      return updated;
     });
+
+    if (profile?.id) {
+      apiClient.saveProgress(profile.id, missionId, getMissionScore(missionId), 'in_progress').catch(() => {
+        // Handled silently for offline mode
+      });
+    }
   };
 
-  const completeMission = (missionId: string, score: number) => {
+  const completeMission = async (missionId: string, score: number) => {
     let newlyEarnedBadge: string | undefined;
     let nextUnlockedMission: string | undefined;
 
@@ -108,12 +159,17 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const targetBadgeDef = badgesData.find(b => b.missionId === missionId);
     if (targetBadgeDef && score >= 70 && !hasBadge(targetBadgeDef.id)) {
       newlyEarnedBadge = targetBadgeDef.id;
-      setBadges(prev => [...prev, {
+      const newBadgeRecord: EarnedBadge = {
         badgeId: targetBadgeDef.id,
         earnedAt: new Date().toISOString(),
         missionId,
         score
-      }]);
+      };
+      setBadges(prev => [...prev, newBadgeRecord]);
+
+      if (profile?.id) {
+        apiClient.awardBadge(profile.id, targetBadgeDef.id, missionId, score).catch(() => {});
+      }
     }
 
     // Determine next mission to unlock
@@ -147,6 +203,16 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return updated;
     });
 
+    // Persist to server
+    if (profile?.id) {
+      try {
+        await apiClient.saveProgress(profile.id, missionId, score, 'complete');
+      } catch (err) {
+        const error = err as Error;
+        setApiError(`Progress saved locally. Server sync failed: ${error.message}`);
+      }
+    }
+
     return { newlyEarnedBadge, nextUnlockedMission };
   };
 
@@ -170,7 +236,6 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.removeItem(BADGES_KEY);
   };
 
-  // Rank calculation based on total score and badges
   const totalScore = Object.values(progress).reduce((acc, curr) => acc + curr.score, 0);
   const totalXp = totalScore * 10 + badges.length * 250;
 
@@ -185,6 +250,8 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         progress,
         badges,
+        isLoading,
+        apiError,
         completeMission,
         startMission,
         resetProgress,
@@ -193,7 +260,8 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         getMissionScore,
         hasBadge,
         totalXp,
-        rankTitle
+        rankTitle,
+        refreshProgress
       }}
     >
       {children}
@@ -208,4 +276,3 @@ export const useProgress = () => {
   }
   return context;
 };
-

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Check, Play, BookOpen, RotateCcw, Award, Sparkles, Layers } from 'lucide-react';
+import { ArrowLeft, Check, Play, BookOpen, RotateCcw, Award, Sparkles, Layers, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Button } from '../../components/common/Button';
 import { QuizWidget, QuizQuestion } from '../../components/common/QuizWidget';
@@ -33,6 +33,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
   const [simScore, setSimScore] = useState<number>(0);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [earnedBadgeAlert, setEarnedBadgeAlert] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   const { completeMission, startMission } = useProgress();
 
   React.useEffect(() => {
@@ -49,21 +50,28 @@ export const MissionShell: React.FC<MissionShellProps> = ({
     setCurrentPhase('evaluate');
   };
 
-  const handleQuizCompleted = (quizScoreVal: number) => {
+  const handleQuizCompleted = async (quizScoreVal: number) => {
+    if (isSaving) return;
+    setIsSaving(true);
+
     // Weighted final score: 40% simulation performance + 60% scientific debrief mastery
     const combinedScore = Math.round(simScore * 0.4 + quizScoreVal * 0.6);
     setFinalScore(combinedScore);
 
-    const result = completeMission(missionId, combinedScore);
+    try {
+      const result = await completeMission(missionId, combinedScore);
 
-    if (result.newlyEarnedBadge) {
-      soundEffects.playSuccess();
-      setEarnedBadgeAlert(true);
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
+      if (result.newlyEarnedBadge) {
+        soundEffects.playSuccess();
+        setEarnedBadgeAlert(true);
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -77,7 +85,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
       {/* Top Navigation & Phase Stepper */}
-      <div className="bg-space-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl backdrop-blur-md">
+      <nav aria-label="Mission Phase Navigation" className="bg-space-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
@@ -88,13 +96,13 @@ export const MissionShell: React.FC<MissionShellProps> = ({
             Mission Deck
           </Button>
 
-          <div className="h-6 w-px bg-slate-800" />
+          <div className="h-6 w-px bg-slate-800" aria-hidden="true" />
 
           <div>
             <div className="text-[11px] font-mono text-sky-400 font-bold uppercase tracking-wider">
               {category}
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-white font-display">{title}</h2>
+            <h1 className="text-lg sm:text-xl font-black text-white font-display">{title}</h1>
           </div>
         </div>
 
@@ -122,17 +130,17 @@ export const MissionShell: React.FC<MissionShellProps> = ({
                     : 'text-slate-500'
                 }`}
               >
-                {isCompleted ? <Check className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
+                {isCompleted ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
                 <span className="hidden sm:inline">{step.label}</span>
                 <span className="sm:hidden">{idx + 1}</span>
               </div>
             );
           })}
         </div>
-      </div>
+      </nav>
 
       {/* Main Mission Content Area */}
-      <div className="relative">
+      <section aria-label="Mission Workspace" className="relative">
         {currentPhase === 'plan' && planComponent(handleStartExecution)}
 
         {currentPhase === 'execute' && executeComponent(handleSimFinished)}
@@ -146,25 +154,25 @@ export const MissionShell: React.FC<MissionShellProps> = ({
             />
 
             {finalScore !== null && (
-              <div className="bg-space-900 border border-slate-800 rounded-3xl p-6 text-center max-w-xl mx-auto shadow-2xl">
+              <div className="bg-space-900 border border-slate-800 rounded-3xl p-6 text-center max-w-xl mx-auto shadow-2xl animate-fadeIn">
                 {earnedBadgeAlert ? (
                   <div className="space-y-3 mb-6">
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold border border-amber-500/40">
-                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <Sparkles className="w-4 h-4 text-amber-400" aria-hidden="true" />
                       NEW NASA BADGE UNLOCKED!
                     </div>
-                    <h3 className="text-2xl font-black text-white font-display">
+                    <h2 className="text-2xl font-black text-white font-display">
                       Congratulations Astronaut!
-                    </h3>
+                    </h2>
                     <p className="text-slate-300 text-sm">
                       Your flight data has been validated by mission control. You have earned the certified badge for this scenario.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-2 mb-6">
-                    <h3 className="text-xl font-bold text-white font-display">
+                    <h2 className="text-xl font-bold text-white font-display">
                       Final Mission Assessment: {finalScore}%
-                    </h3>
+                    </h2>
                     <p className="text-slate-400 text-xs">
                       {finalScore >= 70
                         ? "Qualified! Next mission trajectory is now unlocked on your flight map."
@@ -185,8 +193,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
             )}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };
-

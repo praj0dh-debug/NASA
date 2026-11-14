@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiClient } from '../lib/apiClient';
 
 export interface CadetProfile {
   id: string;
   nickname: string;
   callsign: string;
-  avatar: string; // avatar identifier
+  avatar: string;
   ageGroup: '5-7' | '8-10' | '11+';
   consentGranted: boolean;
   parentEmail?: string;
+  classCode?: string;
   role: 'cadet' | 'teacher';
   createdAt: string;
 }
@@ -30,6 +32,7 @@ const defaultCadet: CadetProfile = {
   callsign: 'STAR-SEEKER',
   avatar: '👨‍🚀',
   ageGroup: '8-10',
+  classCode: 'NASA-CADET-5A',
   consentGranted: true,
   role: 'cadet',
   createdAt: new Date().toISOString()
@@ -52,6 +55,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (profile) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+      // Sync cadet profile to backend roster
+      apiClient.enrollCadet({
+        id: profile.id,
+        nickname: profile.nickname,
+        callsign: profile.callsign,
+        avatar: profile.avatar,
+        classCode: profile.classCode || 'NASA-CADET-5A',
+        ageGroup: profile.ageGroup
+      }).catch(() => {
+        // Fall back gracefully offline
+      });
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -93,4 +107,3 @@ export const useUser = () => {
   }
   return context;
 };
-
