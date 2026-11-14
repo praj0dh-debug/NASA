@@ -32,11 +32,11 @@ export const RocketLaunchMission: React.FC<RocketLaunchMissionProps> = ({ onExit
           onLaunch={onReady}
         />
       )}
-      executeComponent={onSimComplete => (
+      executeComponent={(onSimComplete, onRestartToPlan) => (
         <LaunchSimScene
           config={config}
           onComplete={onSimComplete}
-          onRestart={() => {}}
+          onRestart={onRestartToPlan || (() => {})}
         />
       )}
       quizQuestions={configData.quiz}

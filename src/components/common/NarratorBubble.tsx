@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { useA11y } from '../accessibility/a11yContext';
 import { speechNarrator } from '../../lib/speechNarrator';
 
@@ -32,7 +32,6 @@ export const NarratorBubble: React.FC<NarratorBubbleProps> = ({
     }
   };
 
-  // If user has audioNarration turned on globally, also trigger on mount or change
   React.useEffect(() => {
     if (settings.audioNarration) {
       speakNarration(message);
@@ -40,33 +39,33 @@ export const NarratorBubble: React.FC<NarratorBubbleProps> = ({
   }, [message, settings.audioNarration]);
 
   return (
-    <div className={`relative flex items-start gap-3.5 bg-gradient-to-r from-space-900/95 via-space-850/95 to-blue-950/90 border border-sky-500/30 rounded-2xl p-4 shadow-xl backdrop-blur-md ${className}`}>
+    <div className={`relative flex items-start gap-4 bg-[#12153f]/90 border border-[#2e336d]/70 rounded-2xl p-4 shadow-xl backdrop-blur-xl ${className}`}>
       {/* Mentor Avatar */}
       <div className="relative shrink-0">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-400 to-indigo-600 p-0.5 shadow-md flex items-center justify-center text-2xl">
-          <div className="w-full h-full bg-space-950 rounded-[14px] flex items-center justify-center">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-400 p-0.5 shadow-md flex items-center justify-center text-xl">
+          <div className="w-full h-full bg-[#0a0b2e] rounded-[10px] flex items-center justify-center">
             {avatar}
           </div>
         </div>
-        <div className="absolute -bottom-1 -right-1 bg-emerald-500 w-3.5 h-3.5 rounded-full border-2 border-space-950" title="Online" />
+        <div className="absolute -bottom-0.5 -right-0.5 bg-emerald-500 w-3 h-3 rounded-full border-2 border-[#0a0b2e]" title="Online" />
       </div>
 
       {/* Speech Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-xs uppercase tracking-wider text-sky-400 font-display">
+            <span className="font-bold text-xs uppercase tracking-wider text-purple-300">
               {title}
             </span>
-            <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-sky-950/80 text-sky-300 border border-sky-800/60">
-              MISSION CONTROL
+            <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#0a0b2e] text-slate-400 border border-[#1f245c]">
+              MISSION BRIEFING
             </span>
           </div>
 
           <button
             onClick={handleSpeak}
-            className={`p-1.5 rounded-lg text-slate-400 hover:text-sky-300 hover:bg-space-800 transition-colors ${
-              isPlaying ? 'text-sky-400 bg-sky-950/60 ring-2 ring-sky-400' : ''
+            className={`p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors ${
+              isPlaying ? 'text-emerald-400 bg-emerald-950/60 ring-1 ring-emerald-400' : ''
             }`}
             title={isPlaying ? "Stop Voice Narration" : "Listen to Mission Briefing"}
             aria-label="Toggle voiceover narration"
@@ -75,11 +74,10 @@ export const NarratorBubble: React.FC<NarratorBubbleProps> = ({
           </button>
         </div>
 
-        <p className="text-slate-200 text-sm leading-relaxed font-medium">
+        <p className="text-slate-300 text-sm leading-relaxed">
           {message}
         </p>
       </div>
     </div>
   );
 };
-

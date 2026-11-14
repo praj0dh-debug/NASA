@@ -15,7 +15,7 @@ interface MissionShellProps {
   badgeId: string;
   onExit: () => void;
   planComponent: (onReadyToExecute: () => void) => React.ReactNode;
-  executeComponent: (onSimulationComplete: (simScore: number) => void) => React.ReactNode;
+  executeComponent: (onSimulationComplete: (simScore: number) => void, onRestartToPlan?: () => void) => React.ReactNode;
   quizQuestions: QuizQuestion[];
 }
 
@@ -54,7 +54,6 @@ export const MissionShell: React.FC<MissionShellProps> = ({
     if (isSaving) return;
     setIsSaving(true);
 
-    // Weighted final score: 40% simulation performance + 60% scientific debrief mastery
     const combinedScore = Math.round(simScore * 0.4 + quizScoreVal * 0.6);
     setFinalScore(combinedScore);
 
@@ -84,30 +83,29 @@ export const MissionShell: React.FC<MissionShellProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fadeIn">
-      {/* Top Navigation & Phase Stepper */}
-      <nav aria-label="Mission Phase Navigation" className="bg-space-900/90 border border-slate-800 rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            size="sm"
+      {/* Top Mission Header & Phase Stepper in BeanMachine Glass Style */}
+      <nav aria-label="Mission Phase Navigation" className="bg-[#12153f]/90 border border-[#2e336d]/70 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center gap-3.5">
+          <button
             onClick={onExit}
-            icon={<ArrowLeft className="w-4 h-4" />}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0a0b2e]/80 hover:bg-[#1a1e5a] border border-[#2e336d]/70 text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-md"
           >
-            Mission Deck
-          </Button>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Mission Deck</span>
+          </button>
 
-          <div className="h-6 w-px bg-slate-800" aria-hidden="true" />
+          <div className="h-6 w-px bg-[#1f245c]" aria-hidden="true" />
 
           <div>
-            <div className="text-[11px] font-mono text-sky-400 font-bold uppercase tracking-wider">
+            <div className="text-[11px] font-mono text-purple-300 font-bold uppercase tracking-wider">
               {category}
             </div>
-            <h1 className="text-lg sm:text-xl font-black text-white font-display">{title}</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-white">{title}</h1>
           </div>
         </div>
 
-        {/* 3-Step Plan-Execute-Evaluate Stepper */}
-        <div className="flex items-center gap-2 sm:gap-3 bg-space-950 px-3 py-1.5 rounded-2xl border border-slate-800">
+        {/* 3-Step Plan-Execute-Evaluate Stepper in BeanMachine Pill Style */}
+        <div className="flex items-center gap-2 bg-[#0a0b2e]/90 p-1.5 rounded-xl border border-[#1f245c]/80">
           {[
             { id: 'plan', label: '1. Plan & Build', icon: Layers },
             { id: 'execute', label: '2. Execute Sim', icon: Play },
@@ -120,20 +118,21 @@ export const MissionShell: React.FC<MissionShellProps> = ({
               (step.id === 'execute' && currentPhase === 'evaluate');
 
             return (
-              <div
+              <button
                 key={step.id}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                onClick={() => setCurrentPhase(step.id as MissionPhase)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20'
+                    ? 'bg-emerald-500 text-space-950 shadow-md shadow-emerald-500/20'
                     : isCompleted
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'text-slate-500'
+                    ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 {isCompleted ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
                 <span className="hidden sm:inline">{step.label}</span>
                 <span className="sm:hidden">{idx + 1}</span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -143,7 +142,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
       <section aria-label="Mission Workspace" className="relative">
         {currentPhase === 'plan' && planComponent(handleStartExecution)}
 
-        {currentPhase === 'execute' && executeComponent(handleSimFinished)}
+        {currentPhase === 'execute' && executeComponent(handleSimFinished, handleRestart)}
 
         {currentPhase === 'evaluate' && (
           <div className="space-y-6">
@@ -154,14 +153,14 @@ export const MissionShell: React.FC<MissionShellProps> = ({
             />
 
             {finalScore !== null && (
-              <div className="bg-space-900 border border-slate-800 rounded-3xl p-6 text-center max-w-xl mx-auto shadow-2xl animate-fadeIn">
+              <div className="bg-[#12153f]/90 border border-[#2e336d]/70 rounded-2xl p-8 text-center max-w-xl mx-auto shadow-2xl backdrop-blur-xl animate-fadeIn">
                 {earnedBadgeAlert ? (
                   <div className="space-y-3 mb-6">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-bold border border-amber-500/40">
-                      <Sparkles className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-xs font-bold border border-emerald-500/40">
+                      <Sparkles className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                       NEW NASA BADGE UNLOCKED!
                     </div>
-                    <h2 className="text-2xl font-black text-white font-display">
+                    <h2 className="text-2xl font-bold text-white">
                       Congratulations Astronaut!
                     </h2>
                     <p className="text-slate-300 text-sm">
@@ -170,7 +169,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-2 mb-6">
-                    <h2 className="text-xl font-bold text-white font-display">
+                    <h2 className="text-xl font-bold text-white">
                       Final Mission Assessment: {finalScore}%
                     </h2>
                     <p className="text-slate-400 text-xs">
@@ -185,7 +184,7 @@ export const MissionShell: React.FC<MissionShellProps> = ({
                   <Button variant="secondary" onClick={handleRestart} icon={<RotateCcw className="w-4 h-4" />}>
                     Replay Mission
                   </Button>
-                  <Button variant="accent" onClick={onExit} icon={<ArrowLeft className="w-4 h-4" />}>
+                  <Button variant="bean" onClick={onExit} icon={<ArrowLeft className="w-4 h-4" />}>
                     Return to Map
                   </Button>
                 </div>

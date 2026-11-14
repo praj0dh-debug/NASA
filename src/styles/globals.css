@@ -4,9 +4,18 @@
 
 @layer base {
   body {
-    @apply bg-space-950 text-slate-100 font-sans antialiased min-h-screen selection:bg-sky-500 selection:text-space-950;
+    @apply bg-[#0a0b2e] text-slate-100 font-sans antialiased min-h-screen selection:bg-sky-500 selection:text-space-950;
     overflow-x: hidden;
   }
+}
+
+/* ═══════════════════════════════════════════════════
+   BeanMachine Space Theme — Custom Utilities
+   ═══════════════════════════════════════════════════ */
+
+/* Smooth anchor scrolling */
+html {
+  scroll-behavior: smooth;
 }
 
 /* Accessibility: Text Scaling */
@@ -44,23 +53,23 @@ html.a11y-colorblind .border-rose-400 {
   border-color: #D55E00 !important; /* Okabe-Ito Vermilion */
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — deep blue theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #050714;
+  background: #0a0b2e;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1E293B;
+  background: #1e2055;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #2e3075;
 }
 
 /* Fade in animation */
@@ -79,3 +88,19 @@ html.a11y-colorblind .border-rose-400 {
   animation: fadeIn 0.25s ease-out forwards;
 }
 
+/* ═══════════════════════════════════════════════════
+   Landing page section gradient transitions
+   ═══════════════════════════════════════════════════ */
+
+/* Ensure landing sections blend seamlessly */
+.landing-gradient-hero {
+  background: linear-gradient(180deg, #0a0b2e 0%, #12153f 40%, #1a1050 100%);
+}
+
+.landing-gradient-services {
+  background: linear-gradient(180deg, #1a1050 0%, #12153f 50%, #16124a 100%);
+}
+
+.landing-gradient-showcase {
+  background: linear-gradient(180deg, #16124a 0%, #0d0e2a 100%);
+}

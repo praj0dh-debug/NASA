@@ -18,72 +18,72 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSelectMission }) => {
   const completedCount = Object.values(progress).filter(p => p.status === 'complete').length;
 
   return (
-    <div className="space-y-8 animate-fadeIn max-w-7xl mx-auto">
-      {/* Mentor Welcome Bubble */}
+    <div id="missions" className="space-y-8 animate-fadeIn max-w-7xl mx-auto py-8">
+      {/* Mentor Welcome Bubble in BeanMachine styling */}
       <NarratorBubble
         avatar="👩‍🚀"
         title="Flight Director Vega"
-        message="Welcome to the NASA Artemis Cadet Flight Deck! Master orbital mechanics in Rocket Launch to unlock our lunar base, Mars rover coding, and planetary defense simulators."
+        message="Welcome to the NASA Artemis STEM Mission Deck! Master orbital mechanics in Rocket Launch to unlock our lunar base, Mars rover coding, and planetary defense simulators."
       />
 
       {/* Hero Flight Pathway Header */}
-      <div className="relative rounded-3xl bg-gradient-to-r from-space-900 via-space-850 to-blue-950/70 border border-sky-500/30 p-6 sm:p-8 overflow-hidden shadow-2xl">
+      <div className="relative rounded-2xl bg-gradient-to-r from-[#12153f] via-[#1a1050] to-[#16124a] border border-[#2e336d]/70 p-6 sm:p-8 overflow-hidden shadow-2xl backdrop-blur-xl">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-sky-500/20 border border-sky-400/30 rounded-full text-sky-300 text-xs font-semibold mb-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/15 border border-purple-400/30 rounded-full text-purple-300 text-xs font-semibold mb-3">
               <Orbit className="w-3.5 h-3.5 animate-spin" />
               <span>Artemis Spaceflight Progression</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white font-display tracking-tight">
-              Space Journey Mission Map
-            </h1>
-            <p className="text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+              Aerospace Simulation Platforms
+            </h2>
+            <p className="text-sm text-slate-400 mt-2 max-w-2xl leading-relaxed">
               Step through 6 authentic aerospace engineering scenarios. Each completed flight debrief earns a certified NASA Cadet Badge and unlocks the next planetary trajectory.
             </p>
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 bg-space-950 p-1.5 rounded-2xl border border-slate-800 shrink-0">
+          <div className="flex items-center gap-1.5 bg-[#0a0b2e]/90 p-1.5 rounded-xl border border-[#1f245c]/70 shrink-0">
             <button
               onClick={() => setViewMode('map')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'map'
-                  ? 'bg-sky-500 text-slate-950 shadow-md'
+                  ? 'bg-emerald-500 text-space-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Map className="w-4 h-4" />
+              <Map className="w-3.5 h-3.5" />
               <span>Orbital Path</span>
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewMode === 'grid'
-                  ? 'bg-sky-500 text-slate-950 shadow-md'
+                  ? 'bg-emerald-500 text-space-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Grid className="w-4 h-4" />
+              <Grid className="w-3.5 h-3.5" />
               <span>Mission Grid</span>
             </button>
           </div>
         </div>
 
-        {/* Background glow orbs */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* Atmospheric Glow */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* Visual Journey Roadmap (when viewMode === 'map') */}
       {viewMode === 'map' && (
-        <div className="bg-space-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-800">
-            <h3 className="font-bold text-lg text-white font-display flex items-center gap-2">
-              <Compass className="w-5 h-5 text-sky-400" />
-              <span>Artemis Flight Sequence (Planets & Orbits)</span>
+        <div className="bg-[#12153f]/80 border border-[#2e336d]/60 rounded-2xl p-6 sm:p-8 relative overflow-hidden shadow-2xl backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#1f245c]/60">
+            <h3 className="font-bold text-lg text-white flex items-center gap-2">
+              <Compass className="w-5 h-5 text-purple-400" />
+              <span>Artemis Flight Sequence</span>
             </h3>
             <span className="text-xs font-mono text-slate-400">
-              Completed: <span className="text-sky-300 font-bold">{completedCount}</span> / 6 Missions
+              Completed: <span className="text-emerald-400 font-bold">{completedCount}</span> / 6 Missions
             </span>
           </div>
 
@@ -97,45 +97,45 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSelectMission }) => {
                 <div
                   key={mission.id}
                   onClick={() => !isLocked && onSelectMission(mission.id)}
-                  className={`relative p-5 rounded-3xl border transition-all duration-300 flex flex-col justify-between ${
+                  className={`relative p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
                     isLocked
-                      ? 'bg-space-950/40 border-slate-800/80 opacity-60 cursor-not-allowed'
+                      ? 'bg-[#0a0b2e]/50 border-[#1f245c]/30 opacity-60 cursor-not-allowed'
                       : isComplete
-                      ? 'bg-gradient-to-b from-space-850 to-space-900 border-emerald-500/40 hover:border-emerald-300 hover:scale-[1.02] cursor-pointer shadow-lg shadow-emerald-500/5'
-                      : 'bg-gradient-to-b from-space-850 to-space-900 border-sky-400/50 hover:border-sky-300 hover:scale-[1.02] cursor-pointer shadow-xl shadow-sky-500/10 ring-1 ring-sky-400/30'
+                      ? 'bg-[#16124a]/90 border-emerald-500/40 hover:border-emerald-300 hover:scale-[1.02] cursor-pointer shadow-lg shadow-emerald-500/10'
+                      : 'bg-[#16124a]/90 border-[#2e336d]/70 hover:border-indigo-400/70 hover:scale-[1.02] cursor-pointer shadow-xl shadow-indigo-500/15'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <span className="w-10 h-10 rounded-2xl bg-space-800 border border-slate-700 flex items-center justify-center font-display font-black text-sm text-sky-400">
+                    <span className="w-9 h-9 rounded-xl bg-[#0a0b2e] border border-[#1f245c] flex items-center justify-center font-mono font-bold text-xs text-purple-300">
                       0{index + 1}
                     </span>
 
                     {isLocked ? (
-                      <span className="p-1.5 bg-space-800 rounded-xl text-slate-500 border border-slate-700">
-                        <Lock className="w-4 h-4" />
+                      <span className="p-1.5 bg-[#0a0b2e] rounded-lg text-slate-600 border border-[#1f245c]">
+                        <Lock className="w-3.5 h-3.5" />
                       </span>
                     ) : isComplete ? (
-                      <span className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
+                      <span className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/30">
                         <CheckCircle2 className="w-4 h-4" />
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-400/40 animate-pulse">
-                        Active Vector
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                        Ready
                       </span>
                     )}
                   </div>
 
                   <div>
                     <h4 className="font-bold text-white text-base mb-1">{mission.title}</h4>
-                    <p className="text-xs text-slate-300 line-clamp-2 mb-4 leading-relaxed">
+                    <p className="text-xs text-slate-400 line-clamp-2 mb-4 leading-relaxed">
                       {mission.tagline}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-                    <span className="text-slate-400">{mission.category}</span>
-                    <span className={isLocked ? 'text-slate-600' : 'text-sky-400 font-bold flex items-center gap-1'}>
-                      {isLocked ? 'Locked' : 'Engage'} {!isLocked && <ArrowRight className="w-3.5 h-3.5" />}
+                  <div className="pt-3 border-t border-[#1f245c]/50 flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-500">{mission.category}</span>
+                    <span className={isLocked ? 'text-slate-600' : 'text-emerald-400 font-bold flex items-center gap-1'}>
+                      {isLocked ? 'Locked' : 'Launch'} {!isLocked && <ArrowRight className="w-3.5 h-3.5" />}
                     </span>
                   </div>
                 </div>
@@ -159,18 +159,18 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSelectMission }) => {
       )}
 
       {/* Earned Badges Showcase */}
-      <div className="bg-space-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+      <div className="bg-[#12153f]/80 border border-[#2e336d]/60 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#1f245c]/60">
           <div>
-            <h3 className="text-xl font-bold text-white font-display flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-amber-400" />
-              <span>Astronaut Trophy Case & NASA Flight Badges</span>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              <span>Certified Aerospace Credentials & Badges</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Achieve scores of 70% or higher in simulation debriefs to be awarded NASA Artemis credentials.
             </p>
           </div>
-          <span className="text-sm font-mono font-bold text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20">
+          <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-500/30">
             {badges.length} / 6 Unlocked
           </span>
         </div>
@@ -184,4 +184,3 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSelectMission }) => {
     </div>
   );
 };
-

@@ -23,6 +23,86 @@
       "coppaConfirmed": true,
       "educationalConfirmed": true,
       "createdAt": "2026-11-14T01:33:16.791Z"
+    },
+    {
+      "id": "consent-1794622382965-ybxvy",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T02:13:02.965Z"
+    },
+    {
+      "id": "consent-1794639232150-eqo6s",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T06:53:52.150Z"
+    },
+    {
+      "id": "consent-1794639341529-4dzkw",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T06:55:41.529Z"
+    },
+    {
+      "id": "consent-1794639912027-7f9pc",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:05:12.027Z"
+    },
+    {
+      "id": "consent-1794639996424-lwjra",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:06:36.424Z"
+    },
+    {
+      "id": "consent-1794640271101-8ra2o",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:11:11.101Z"
+    },
+    {
+      "id": "consent-1794640459088-gbi9l",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:14:19.088Z"
+    },
+    {
+      "id": "consent-1794640668825-ugno3",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:17:48.825Z"
+    },
+    {
+      "id": "consent-1794640965166-knoby",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:22:45.166Z"
+    },
+    {
+      "id": "consent-1794641135041-pcegr",
+      "email": "test.parent@flight-school.edu",
+      "role": "parent",
+      "coppaConfirmed": true,
+      "educationalConfirmed": true,
+      "createdAt": "2026-11-14T07:25:35.041Z"
     }
   ],
   "students": [
@@ -35,8 +115,8 @@
       "ageGroup": "8-10",
       "consentGranted": true,
       "parentEmail": "test.parent@flight-school.edu",
-      "missionsCompleted": 0,
-      "totalScore": 92,
+      "missionsCompleted": 1,
+      "totalScore": 190,
       "badgesCount": 2,
       "currentMission": "Rocket Launch & Return",
       "status": "active",
@@ -156,20 +236,21 @@
         "missionId": "rocket-launch",
         "status": "in_progress",
         "score": 92,
-        "attempts": 9,
-        "completedAt": "2026-11-13T01:00:00.000Z"
+        "attempts": 16,
+        "completedAt": "2026-11-14T06:55:41.532Z"
       },
       "space-station": {
         "missionId": "space-station",
-        "status": "in_progress",
-        "score": 0,
-        "attempts": 2
+        "status": "complete",
+        "score": 98,
+        "attempts": 5,
+        "completedAt": "2026-11-14T07:15:20.382Z"
       },
       "lunar-exploration": {
         "missionId": "lunar-exploration",
-        "status": "locked",
+        "status": "in_progress",
         "score": 0,
-        "attempts": 0
+        "attempts": 2
       },
       "mars-rover-code": {
         "missionId": "mars-rover-code",

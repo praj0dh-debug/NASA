@@ -2,7 +2,7 @@ import React from 'react';
 import { soundEffects } from '../../lib/soundEffects';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'danger' | 'ghost' | 'bean';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   icon?: React.ReactNode;
   children: React.ReactNode;
@@ -40,7 +40,8 @@ export const Button: React.FC<ButtonProps> = ({
     accent: "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black shadow-orange-500/30 hover:shadow-orange-500/50",
     outline: "bg-transparent border-2 border-sky-400 text-sky-300 hover:bg-sky-400/10",
     danger: "bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white shadow-rose-600/30",
-    ghost: "bg-transparent hover:bg-white/10 text-slate-300 hover:text-white"
+    ghost: "bg-transparent hover:bg-white/10 text-slate-300 hover:text-white",
+    bean: "bg-emerald-500 hover:bg-emerald-400 text-space-950 font-bold shadow-emerald-500/30 hover:shadow-emerald-500/50 border border-emerald-400/30"
   };
 
   return (

@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Play, RotateCcw, ArrowRight, Award, Compass, Zap, Sparkles, Flame, ShieldAlert, ArrowLeft } from 'lucide-react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { RotateCcw, ArrowRight, Zap, Sparkles, Flame, ArrowLeft } from 'lucide-react';
 import { RocketConfig, FlightTelemetry, stepRocketSimulationAdvanced, getIdealPitch } from './rocketPhysics';
 import configData from './config.json';
 import { Button } from '../../components/common/Button';
@@ -18,6 +18,31 @@ interface StarBeacon {
   collected: boolean;
 }
 
+interface SimParticle {
+  active: boolean;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
+interface DetachedBooster {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  vRot: number;
+}
+
+const MAX_PARTICLES = 60;
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 500;
+
 export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComplete, onRestart }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -25,8 +50,6 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
   const [isSimulating, setIsSimulating] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [throttle, setThrottle] = useState(1.0); // 0 to 1
-  const [steerInput, setSteerInput] = useState(0); // -1 to 1
   const [stagingTriggered, setStagingTriggered] = useState(false);
   const [scoreStars, setScoreStars] = useState(0);
 
@@ -34,19 +57,20 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
   const tank = configData.components.tanks.find(t => t.id === config.tankId)!;
   const engine = configData.components.engines.find(e => e.id === config.engineId)!;
 
-  // Generate 8 collectible telemetry star beacons along the optimal gravity turn
-  const [beacons, setBeacons] = useState<StarBeacon[]>([
-    { id: 1, altitudeM: 8000, pitchDeg: 12, collected: false },
-    { id: 2, altitudeM: 18000, pitchDeg: 25, collected: false },
-    { id: 3, altitudeM: 35000, pitchDeg: 42, collected: false },
-    { id: 4, altitudeM: 55000, pitchDeg: 58, collected: false },
-    { id: 5, altitudeM: 80000, pitchDeg: 68, collected: false },
-    { id: 6, altitudeM: 105000, pitchDeg: 76, collected: false },
-    { id: 7, altitudeM: 125000, pitchDeg: 82, collected: false },
-    { id: 8, altitudeM: 140000, pitchDeg: 86, collected: false },
-  ]);
+  // 8 Collectible Telemetry Star Beacons along optimal gravity turn
+  const initialBeacons: StarBeacon[] = [
+    { id: 1, altitudeM: 6000, pitchDeg: 10, collected: false },
+    { id: 2, altitudeM: 16000, pitchDeg: 24, collected: false },
+    { id: 3, altitudeM: 32000, pitchDeg: 40, collected: false },
+    { id: 4, altitudeM: 52000, pitchDeg: 55, collected: false },
+    { id: 5, altitudeM: 75000, pitchDeg: 66, collected: false },
+    { id: 6, altitudeM: 98000, pitchDeg: 74, collected: false },
+    { id: 7, altitudeM: 118000, pitchDeg: 80, collected: false },
+    { id: 8, altitudeM: 136000, pitchDeg: 85, collected: false },
+  ];
+  const beaconsRef = useRef<StarBeacon[]>(initialBeacons);
 
-  const [telemetry, setTelemetry] = useState<FlightTelemetry>({
+  const initialTelemetry: FlightTelemetry = {
     timeSec: 0,
     altitudeM: 0,
     velocityMps: 0,
@@ -69,42 +93,103 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
     corridorScore: 0,
     starsCollected: 0,
     shakeIntensity: 0
-  });
+  };
 
-  const telRef = useRef(telemetry);
-  telRef.current = telemetry;
+  // React state throttled to ~12 Hz to eliminate 60 FPS re-render overhead
+  const [telemetry, setTelemetry] = useState<FlightTelemetry>(initialTelemetry);
 
-  const steerRef = useRef(steerInput);
-  steerRef.current = steerInput;
+  // Fast 60 FPS references for physics & render loop
+  const telRef = useRef<FlightTelemetry>(initialTelemetry);
+  const steerRef = useRef<number>(0);
+  const throttleRef = useRef<number>(1.0);
+  const stagingRef = useRef<boolean>(false);
+  const lastUiUpdateRef = useRef<number>(0);
 
-  const throttleRef = useRef(throttle);
-  throttleRef.current = throttle;
+  // Pre-allocated particle pool to avoid GC pauses during 60 FPS game loop
+  const particlePoolRef = useRef<SimParticle[]>(
+    Array.from({ length: MAX_PARTICLES }, () => ({
+      active: false,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      maxLife: 1,
+      color: '#F97316',
+      size: 6
+    }))
+  );
 
-  const stagingRef = useRef(stagingTriggered);
-  stagingRef.current = stagingTriggered;
+  const spawnParticle = (
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    color: string,
+    size: number,
+    maxLife: number
+  ) => {
+    const pool = particlePoolRef.current;
+    for (let i = 0; i < pool.length; i++) {
+      if (!pool[i].active) {
+        pool[i].active = true;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = vx;
+        pool[i].vy = vy;
+        pool[i].color = color;
+        pool[i].size = size;
+        pool[i].life = maxLife;
+        pool[i].maxLife = maxLife;
+        return;
+      }
+    }
+    // Recycle oldest if pool is full
+    pool[0].active = true;
+    pool[0].x = x;
+    pool[0].y = y;
+    pool[0].vx = vx;
+    pool[0].vy = vy;
+    pool[0].color = color;
+    pool[0].size = size;
+    pool[0].life = maxLife;
+    pool[0].maxLife = maxLife;
+  };
 
-  // Keyboard Event Listeners for direct arcade steering
+  const triggerStageSeparation = useCallback(() => {
+    if (!telRef.current.isStageSeparated) {
+      soundEffects.playStageSeparation();
+      setStagingTriggered(true);
+      stagingRef.current = true;
+    }
+  }, []);
+
+  // Direct keyboard steering handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isSimulating || isFinished) return;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        setSteerInput(-1);
+        steerRef.current = -1;
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        setSteerInput(1);
+        steerRef.current = 1;
       } else if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
-        // If stage 1 is burned out, Space triggers staging!
         if (telRef.current.isStage1BurnedOut && !telRef.current.isStageSeparated) {
           triggerStageSeparation();
-        } else {
-          setThrottle(1.0);
         }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A' || e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        setSteerInput(0);
+      if (
+        e.key === 'ArrowLeft' ||
+        e.key === 'a' ||
+        e.key === 'A' ||
+        e.key === 'ArrowRight' ||
+        e.key === 'd' ||
+        e.key === 'D'
+      ) {
+        steerRef.current = 0;
       }
     };
 
@@ -114,16 +199,9 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isSimulating, isFinished]);
+  }, [isSimulating, isFinished, triggerStageSeparation]);
 
-  const triggerStageSeparation = () => {
-    if (!telRef.current.isStageSeparated) {
-      soundEffects.playStageSeparation();
-      setStagingTriggered(true);
-    }
-  };
-
-  // Countdown timer
+  // Launch countdown timer
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     if (countdown !== null) {
@@ -140,45 +218,60 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
     return () => clearTimeout(timer);
   }, [countdown]);
 
-  // Main 60FPS Game Loop
+  // In-flight Reset ("Fly Again")
+  const handleFlyAgain = () => {
+    const freshTel: FlightTelemetry = {
+      ...initialTelemetry,
+      stage1FuelKg: tank.fuelKg * 0.65,
+      stage2FuelKg: tank.fuelKg * 0.35,
+    };
+    telRef.current = freshTel;
+    setTelemetry(freshTel);
+    beaconsRef.current = initialBeacons.map(b => ({ ...b, collected: false }));
+    setScoreStars(0);
+    setStagingTriggered(false);
+    stagingRef.current = false;
+    steerRef.current = 0;
+    throttleRef.current = 1.0;
+    setIsFinished(false);
+    setSuccess(false);
+    setCountdown(3);
+    setIsSimulating(false);
+    // Clear particles
+    for (const p of particlePoolRef.current) {
+      p.active = false;
+    }
+  };
+
+  // Main 60 FPS Game Loop
   useEffect(() => {
     if (!isSimulating || isFinished) return;
 
     let animationFrameId: number;
     let lastTime = performance.now();
 
-    // Particle pool
-    const particles: Array<{
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      life: number;
-      color: string;
-      size: number;
-    }> = [];
-
-    // Detached booster animation parts
-    const boosters: Array<{
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      rot: number;
-      vRot: number;
-    }> = [];
-
+    // Detached booster parts tracking
+    const boosters: DetachedBooster[] = [];
     let shockwaveRadius = 0;
     let shockwaveActive = false;
     let lastMach1State = false;
+    let prevStageSeparated = false;
+
+    // Fixed star positions for cosmic background
+    const stars = Array.from({ length: 90 }, (_, i) => ({
+      x: ((Math.sin(i * 123) * 0.5 + 0.5) * CANVAS_WIDTH),
+      y: ((Math.cos(i * 87) * 0.5 + 0.5) * (CANVAS_HEIGHT * 0.7)),
+      r: i % 5 === 0 ? 1.8 : 1.0
+    }));
 
     const render = (now: number) => {
-      const dt = Math.min((now - lastTime) / 1000, 0.08);
+      const dt = Math.min((now - lastTime) / 1000, 0.06);
       lastTime = now;
 
-      // Physics integration step
+      // Physics substepping (4 sub-ticks per frame for rock-solid stability)
       let currentTel = telRef.current;
       const substeps = 4;
+      const subDt = dt / substeps;
       for (let s = 0; s < substeps; s++) {
         currentTel = stepRocketSimulationAdvanced(
           currentTel,
@@ -188,52 +281,66 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
           throttleRef.current,
           steerRef.current,
           stagingRef.current,
-          dt / substeps
+          subDt
         );
       }
+      telRef.current = currentTel;
 
-      // If staging just occurred, spawn detaching boosters
-      if (currentTel.isStageSeparated && !telRef.current.isStageSeparated) {
+      // Spawn detaching side boosters when staged
+      if (currentTel.isStageSeparated && !prevStageSeparated) {
+        prevStageSeparated = true;
         boosters.push(
-          { x: -16, y: 15, vx: -35, vy: 15, rot: 0, vRot: -0.1 },
-          { x: 16, y: 15, vx: 35, vy: 15, rot: 0, vRot: 0.1 }
+          { x: -18, y: 15, vx: -45, vy: 25, rot: 0, vRot: -0.15 },
+          { x: 18, y: 15, vx: 45, vy: 25, rot: 0, vRot: 0.15 }
         );
       }
 
-      // Sonic Boom detection
+      // Sonic Boom triggering
       if (currentTel.mach1Passed && !lastMach1State) {
         lastMach1State = true;
         shockwaveActive = true;
-        shockwaveRadius = 10;
+        shockwaveRadius = 15;
         soundEffects.playSonicBoom();
       }
 
-      // Check star beacon collection
-      beacons.forEach(b => {
-        if (!b.collected && Math.abs(currentTel.altitudeM - b.altitudeM) < 6000) {
-          if (Math.abs(currentTel.pitchDeg - b.pitchDeg) < 16) {
+      // Collectible Star Beacons Check
+      const beacons = beaconsRef.current;
+      for (let i = 0; i < beacons.length; i++) {
+        const b = beacons[i];
+        if (!b.collected && Math.abs(currentTel.altitudeM - b.altitudeM) < 6500) {
+          if (Math.abs(currentTel.pitchDeg - b.pitchDeg) < 15) {
             b.collected = true;
             currentTel.starsCollected += 1;
+            setScoreStars(currentTel.starsCollected);
             soundEffects.playStarPickup();
           }
         }
-      });
+      }
 
-      setTelemetry({ ...currentTel });
+      // Throttle React UI state updates to ~12 Hz to eliminate 60 FPS re-render stutter
+      if (now - lastUiUpdateRef.current > 80) {
+        lastUiUpdateRef.current = now;
+        setTelemetry({ ...currentTel });
+      }
 
-      // Check win/lose
+      // Check Terminal Simulation Outcomes
       if (currentTel.orbitAchieved) {
         setIsSimulating(false);
         setIsFinished(true);
         setSuccess(true);
+        setTelemetry({ ...currentTel });
         soundEffects.playSuccess();
         return;
       }
 
-      if (currentTel.crashed || (currentTel.engineBurnedOut && currentTel.altitudeM < 2000 && currentTel.velocityMps < 0)) {
+      if (
+        currentTel.crashed ||
+        (currentTel.engineBurnedOut && currentTel.altitudeM < 2000 && currentTel.velocityMps < 0)
+      ) {
         setIsSimulating(false);
         setIsFinished(true);
         setSuccess(false);
+        setTelemetry({ ...currentTel });
         soundEffects.playWarning();
         return;
       }
@@ -243,184 +350,267 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const w = canvas.width;
-          const h = canvas.height;
+          const w = CANVAS_WIDTH;
+          const h = CANVAS_HEIGHT;
 
-          // Screen Shake translation
           ctx.save();
+
+          // Screen shake
           if (currentTel.shakeIntensity > 0.1) {
             const sx = (Math.random() - 0.5) * currentTel.shakeIntensity;
             const sy = (Math.random() - 0.5) * currentTel.shakeIntensity;
             ctx.translate(sx, sy);
           }
 
-          // Dynamic Sky Background based on altitude
+          // Dynamic Sky Gradient based on altitude
           const altNorm = Math.min(1.0, currentTel.altitudeM / 140000);
-          let skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+          const skyGrad = ctx.createLinearGradient(0, 0, 0, h);
 
-          if (altNorm < 0.25) {
-            // Lower atmosphere: Florida morning sky
-            skyGrad.addColorStop(0, '#1E40AF');
-            skyGrad.addColorStop(0.6, '#38BDF8');
-            skyGrad.addColorStop(1, '#BAE6FD');
-          } else if (altNorm < 0.65) {
-            // Stratosphere: Deep twilight purple/midnight
-            skyGrad.addColorStop(0, '#030712');
-            skyGrad.addColorStop(0.5, '#1E1B4B');
-            skyGrad.addColorStop(1, '#4338CA');
+          if (altNorm < 0.2) {
+            // Troposphere (0 - 28 km): Florida blue sky into upper stratosphere
+            skyGrad.addColorStop(0, '#1E3A8A');
+            skyGrad.addColorStop(0.5, '#2563EB');
+            skyGrad.addColorStop(1, '#38BDF8');
+          } else if (altNorm < 0.55) {
+            // Stratosphere to Mesosphere (28 - 77 km): Deep space indigo & purple
+            skyGrad.addColorStop(0, '#0a0b2e');
+            skyGrad.addColorStop(0.5, '#16124a');
+            skyGrad.addColorStop(1, '#2e336d');
           } else {
-            // Outer Space: Inky blackness with nebular glow
-            skyGrad.addColorStop(0, '#020617');
-            skyGrad.addColorStop(0.7, '#0B0F2A');
-            skyGrad.addColorStop(1, '#020617');
+            // Orbital Vacuum (> 77 km): Cosmic black void
+            skyGrad.addColorStop(0, '#030511');
+            skyGrad.addColorStop(0.6, '#080a21');
+            skyGrad.addColorStop(1, '#0e1030');
           }
           ctx.fillStyle = skyGrad;
           ctx.fillRect(0, 0, w, h);
 
-          // Starfield in vacuum space
-          if (altNorm > 0.2) {
-            const numStars = Math.floor(altNorm * 90);
-            ctx.fillStyle = '#FFFFFF';
-            for (let i = 0; i < numStars; i++) {
-              const starX = ((Math.sin(i * 123) * 0.5 + 0.5) * w);
-              const starY = ((Math.cos(i * 87) * 0.5 + 0.5) * (h * 0.75));
-              const r = (i % 4 === 0) ? 1.8 : 1.0;
+          // Starfield in upper atmosphere and space
+          if (altNorm > 0.18) {
+            const starAlpha = Math.min(1.0, (altNorm - 0.18) * 3);
+            ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
+            for (const s of stars) {
               ctx.beginPath();
-              ctx.arc(starX, starY, r, 0, Math.PI * 2);
+              ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
               ctx.fill();
             }
           }
 
-          // Curved Earth Horizon at high altitude
-          if (altNorm > 0.35) {
-            const earthCenterY = h * 0.8 + (1 - altNorm) * 220;
+          // Camera & Rocket Positioning
+          // Pad position: h - 145. In flight: climbs smoothly to h * 0.46 (centered)
+          const climbRatio = Math.min(1.0, currentTel.altitudeM / 4000);
+          const rocketScreenY = (h - 145) * (1 - climbRatio) + (h * 0.46) * climbRatio;
+
+          // Horizontal position shifts dynamically with gravity turn pitch
+          const pitchRad = (currentTel.pitchDeg * Math.PI) / 180;
+          const maxLateralOffset = w * 0.22;
+          const rocketScreenX = (w * 0.42) + Math.sin(pitchRad) * maxLateralOffset;
+
+          // Atmospheric Layers & Ground Scrolling
+          if (altNorm > 0.4) {
+            // Curved Earth Horizon at high altitude
+            const earthCenterY = h * 0.78 + (1 - altNorm) * 220;
             ctx.beginPath();
-            ctx.arc(w / 2, earthCenterY + 900, 940, Math.PI * 1.15, Math.PI * 1.85);
+            ctx.arc(w / 2, earthCenterY + 880, 920, Math.PI * 1.15, Math.PI * 1.85);
             ctx.fillStyle = '#0284C7';
             ctx.fill();
 
-            // Atmospheric luminous limb
+            // Luminous atmospheric limb
             ctx.lineWidth = 14;
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
             ctx.stroke();
 
-            // Cloud whorls on Earth
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            // Cloud whorl details on Earth
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
             ctx.beginPath();
-            ctx.ellipse(w * 0.45, earthCenterY + 10, 80, 20, 0, 0, Math.PI * 2);
+            ctx.ellipse(w * 0.42, earthCenterY + 12, 75, 18, 0, 0, Math.PI * 2);
             ctx.fill();
           } else {
             // Earth surface & Launch Pad 39B at Cape Canaveral
-            const groundY = h - 60 + (currentTel.altitudeM / 25);
-            if (groundY < h + 150) {
-              // Ocean blue water & green launch pad terrain
-              ctx.fillStyle = '#0369A1';
-              ctx.fillRect(0, groundY + 15, w, h - groundY);
+            // Ground scrolls down as altitude increases
+            const groundY = (rocketScreenY + 60) + (currentTel.altitudeM * 0.08);
+            if (groundY < h + 180) {
+              // Ocean blue water
+              ctx.fillStyle = '#0284C7';
+              ctx.fillRect(0, groundY + 12, w, Math.max(0, h - groundY));
 
-              ctx.fillStyle = '#166534';
-              ctx.fillRect(0, groundY, w, 20);
+              // Green Cape Canaveral terrain
+              ctx.fillStyle = '#15803D';
+              ctx.fillRect(0, groundY, w, 16);
 
               // Launch Pad Gantry Tower
-              const padX = w / 2 - 80;
-              ctx.fillStyle = '#475569';
-              ctx.fillRect(padX, groundY - 110, 24, 110);
+              const padX = (w * 0.42) - 80;
+              ctx.fillStyle = '#334155';
+              ctx.fillRect(padX, groundY - 110, 22, 110);
+              // Red Access Arm
               ctx.fillStyle = '#DC2626';
-              ctx.fillRect(padX, groundY - 80, 45, 8); // Red access arm
+              ctx.fillRect(padX, groundY - 80, 48, 8);
+              // Launch base concrete mount
+              ctx.fillStyle = '#64748B';
+              ctx.fillRect((w * 0.42) - 30, groundY - 6, 60, 10);
+            }
+
+            // High-speed tropospheric clouds (0.8 km - 14 km)
+            if (currentTel.altitudeM > 800 && currentTel.altitudeM < 18000) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+              const cloudY1 = ((currentTel.altitudeM * 0.3) % (h * 1.5)) - 80;
+              const cloudY2 = (((currentTel.altitudeM * 0.45) + 200) % (h * 1.5)) - 80;
+
+              ctx.beginPath();
+              ctx.ellipse(w * 0.25, cloudY1, 140, 30, 0, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.beginPath();
+              ctx.ellipse(w * 0.72, cloudY2, 180, 36, 0, 0, Math.PI * 2);
+              ctx.fill();
             }
           }
 
-          // Draw Optimal Trajectory Corridor (Green visual guidance tunnel)
+          // Trajectory Guidance Corridor Target
           const idealPitch = getIdealPitch(currentTel.altitudeM);
-          const corridorX = w / 2 + Math.sin((idealPitch * Math.PI) / 180) * 120;
-          const corridorY = h * 0.45;
+          const idealRad = (idealPitch * Math.PI) / 180;
+          const pitchError = Math.abs(currentTel.pitchDeg - idealPitch);
 
-          // Corridor HUD indicator
-          ctx.strokeStyle = currentTel.inCorridor ? 'rgba(74, 222, 128, 0.7)' : 'rgba(239, 68, 68, 0.5)';
-          ctx.lineWidth = 3;
-          ctx.setLineDash([8, 6]);
+          // Corridor target reticle is placed 125px forward along the ideal pitch angle
+          const corridorDist = 125;
+          const corridorX = rocketScreenX + Math.sin(idealRad) * corridorDist;
+          const corridorY = rocketScreenY - Math.cos(idealRad) * corridorDist;
+
+          // Flight Path Guideline (projected from rocket nose towards corridor gate)
+          ctx.strokeStyle = currentTel.inCorridor ? 'rgba(74, 222, 128, 0.35)' : 'rgba(248, 113, 113, 0.3)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
           ctx.beginPath();
-          ctx.arc(corridorX, corridorY, 45, 0, Math.PI * 2);
+          ctx.moveTo(rocketScreenX, rocketScreenY - 35);
+          ctx.lineTo(corridorX, corridorY);
           ctx.stroke();
           ctx.setLineDash([]);
 
-          ctx.fillStyle = currentTel.inCorridor ? 'rgba(74, 222, 128, 0.15)' : 'rgba(239, 68, 68, 0.1)';
+          // Corridor Gate Reticle
+          ctx.save();
+          ctx.translate(corridorX, corridorY);
+          ctx.rotate(idealRad);
+
+          // Outer dashed circle
+          ctx.strokeStyle = currentTel.inCorridor ? 'rgba(74, 222, 128, 0.85)' : 'rgba(248, 113, 113, 0.75)';
+          ctx.lineWidth = currentTel.inCorridor ? 3 : 2;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.arc(0, 0, 36, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Gate inner glow
+          ctx.fillStyle = currentTel.inCorridor ? 'rgba(74, 222, 128, 0.12)' : 'rgba(248, 113, 113, 0.08)';
           ctx.fill();
 
-          ctx.font = 'bold 10px monospace';
-          ctx.fillStyle = currentTel.inCorridor ? '#4ADE80' : '#F87171';
-          ctx.fillText(currentTel.inCorridor ? 'CORRIDOR LOCKED' : 'ALIGN TRAJECTORY', corridorX - 45, corridorY - 52);
+          // Reticle Crosshair Ticks
+          ctx.strokeStyle = currentTel.inCorridor ? '#4ADE80' : '#F87171';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(-42, 0); ctx.lineTo(-30, 0);
+          ctx.moveTo(30, 0); ctx.lineTo(42, 0);
+          ctx.moveTo(0, -42); ctx.lineTo(0, -30);
+          ctx.moveTo(0, 30); ctx.lineTo(0, 42);
+          ctx.stroke();
 
-          // Draw Collectible Star Beacons
-          beacons.forEach(b => {
-            if (!b.collected && Math.abs(currentTel.altitudeM - b.altitudeM) < 25000) {
-              const bY = corridorY - ((b.altitudeM - currentTel.altitudeM) / 300);
-              const bX = w / 2 + Math.sin((b.pitchDeg * Math.PI) / 180) * 120;
+          ctx.restore();
+
+          // Corridor Status Text & Steering Prompt
+          ctx.font = 'bold 11px monospace';
+          if (currentTel.inCorridor) {
+            ctx.fillStyle = '#4ADE80';
+            ctx.fillText('✓ TRAJECTORY LOCKED', corridorX - 58, corridorY - 45);
+          } else {
+            ctx.fillStyle = '#F87171';
+            const cue = currentTel.pitchDeg > idealPitch ? '⮪ PITCH UP [A]' : 'PITCH RIGHT [D] ⮫';
+            ctx.fillText(cue, corridorX - 44, corridorY - 45);
+          }
+
+          // Star Beacons (Descending smoothly towards the corridor gate)
+          for (const b of beacons) {
+            if (!b.collected && Math.abs(currentTel.altitudeM - b.altitudeM) < 22000) {
+              const altDiff = b.altitudeM - currentTel.altitudeM;
+              const beaconProg = altDiff / 22000;
+              const bRad = (b.pitchDeg * Math.PI) / 180;
+              const bDist = corridorDist + (beaconProg * 140);
+              const bX = rocketScreenX + Math.sin(bRad) * bDist;
+              const bY = rocketScreenY - Math.cos(bRad) * bDist;
+
               ctx.fillStyle = '#FBBF24';
               ctx.beginPath();
-              ctx.arc(bX, bY, 8, 0, Math.PI * 2);
+              ctx.arc(bX, bY, 10, 0, Math.PI * 2);
               ctx.fill();
               ctx.strokeStyle = '#FFFFFF';
               ctx.lineWidth = 2;
               ctx.stroke();
 
-              ctx.font = 'bold 11px sans-serif';
+              ctx.font = 'bold 12px sans-serif';
               ctx.fillText('⭐', bX - 7, bY + 4);
             }
-          });
+          }
 
-          // Sonic Boom Shockwave Ring animation
+          // Sonic Boom Condensation Cone / Shockwave
           if (shockwaveActive) {
-            shockwaveRadius += dt * 380;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 1 - shockwaveRadius / 150)})`;
+            shockwaveRadius += dt * 360;
+            const shockAlpha = Math.max(0, 1 - shockwaveRadius / 160);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${shockAlpha})`;
             ctx.lineWidth = 4;
             ctx.beginPath();
-            ctx.arc(w / 2, h * 0.5, shockwaveRadius, 0, Math.PI * 2);
+            ctx.arc(rocketScreenX, rocketScreenY, shockwaveRadius, 0, Math.PI * 2);
             ctx.stroke();
 
-            if (shockwaveRadius > 150) shockwaveActive = false;
+            if (shockwaveRadius > 160) shockwaveActive = false;
           }
 
-          // Draw Exhaust Fire & Smoke Plumes
-          const rocketScreenX = w / 2;
-          const rocketScreenY = Math.max(h * 0.42, h - 110 - (currentTel.altitudeM / 400));
+          // Exhaust Fire & Smoke Plume
           const hasFuel = (currentTel.isStageSeparated ? currentTel.stage2FuelKg : currentTel.stage1FuelKg) > 0;
-
           if (currentTel.thrustN > 0 && hasFuel) {
-            for (let p = 0; p < (currentTel.isStageSeparated ? 3 : 6); p++) {
-              particles.push({
-                x: rocketScreenX + (Math.random() - 0.5) * (currentTel.isStageSeparated ? 6 : 14),
-                y: rocketScreenY + 28,
-                vx: (Math.random() - 0.5) * 5,
-                vy: Math.random() * 12 + 8,
-                life: 1.0,
-                color: currentTel.isStageSeparated
-                  ? (Math.random() > 0.4 ? '#38BDF8' : '#818CF8') // High-efficiency blue/purple plasma
-                  : (Math.random() > 0.35 ? '#F97316' : '#FBBF24'), // Kerolox orange fire
-                size: Math.random() * 8 + 5
-              });
+            const spawnCount = currentTel.isStageSeparated ? 2 : 4;
+            const isUpper = currentTel.isStageSeparated;
+            const exhaustCos = Math.cos(pitchRad);
+            const exhaustSin = Math.sin(pitchRad);
+
+            for (let p = 0; p < spawnCount; p++) {
+              const nozzleOffset = 32;
+              const px = rocketScreenX - exhaustSin * nozzleOffset + (Math.random() - 0.5) * (isUpper ? 6 : 12);
+              const py = rocketScreenY + exhaustCos * nozzleOffset + (Math.random() - 0.5) * 4;
+
+              const speed = Math.random() * 12 + 10;
+              const pvx = -exhaustSin * speed + (Math.random() - 0.5) * 6;
+              const pvy = exhaustCos * speed + (Math.random() - 0.5) * 4;
+
+              const pColor = isUpper
+                ? Math.random() > 0.4 ? '#38BDF8' : '#818CF8'
+                : Math.random() > 0.35 ? '#F97316' : '#FBBF24';
+
+              spawnParticle(px, py, pvx, pvy, pColor, Math.random() * 7 + 4, 0.7);
             }
           }
 
-          // Update & draw particles
-          for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.life -= dt * 2.2;
-            p.size *= 0.95;
+          // Update & Draw Particles from pool
+          const pool = particlePoolRef.current;
+          for (let i = 0; i < pool.length; i++) {
+            const p = pool[i];
+            if (p.active) {
+              p.x += p.vx * dt;
+              p.y += p.vy * dt;
+              p.life -= dt;
+              p.size *= 0.96;
 
-            if (p.life <= 0) {
-              particles.splice(i, 1);
-            } else {
-              ctx.fillStyle = p.color;
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-              ctx.fill();
+              if (p.life <= 0) {
+                p.active = false;
+              } else {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(1, p.size), 0, Math.PI * 2);
+                ctx.fill();
+              }
             }
           }
 
-          // Detached Boosters animation
-          for (let b of boosters) {
+          // Detached Boosters Rendering
+          for (const b of boosters) {
             b.x += b.vx * dt;
             b.y += b.vy * dt;
             b.rot += b.vRot;
@@ -429,31 +619,39 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.translate(rocketScreenX + b.x, rocketScreenY + b.y);
             ctx.rotate(b.rot);
             ctx.fillStyle = '#64748B';
-            ctx.fillRect(-4, -12, 8, 24);
+            ctx.fillRect(-4, -14, 8, 28);
+            // Booster nose
+            ctx.fillStyle = '#E2E8F0';
+            ctx.beginPath();
+            ctx.moveTo(0, -20);
+            ctx.lineTo(4, -14);
+            ctx.lineTo(-4, -14);
+            ctx.closePath();
+            ctx.fill();
             ctx.restore();
           }
 
-          // Rocket Body Render
+          // Main Artemis Rocket Body
           ctx.save();
           ctx.translate(rocketScreenX, rocketScreenY);
-          ctx.rotate((currentTel.pitchDeg * Math.PI) / 180);
+          ctx.rotate(pitchRad);
 
-          // Green aura if inside optimal corridor
+          // Corridor alignment halo
           if (currentTel.inCorridor) {
             ctx.shadowColor = '#4ADE80';
-            ctx.shadowBlur = 15;
+            ctx.shadowBlur = 14;
           }
 
           // Capsule Nosecone (Orion / Science core)
           ctx.fillStyle = '#F8FAFC';
           ctx.beginPath();
-          ctx.moveTo(0, -38);
+          ctx.moveTo(0, -40);
           ctx.lineTo(10, -14);
           ctx.lineTo(-10, -14);
           ctx.closePath();
           ctx.fill();
 
-          // Capsule Heatshield rim & Window
+          // Capsule Window & Rim
           ctx.fillStyle = '#0284C7';
           ctx.beginPath();
           ctx.arc(0, -22, 3.5, 0, Math.PI * 2);
@@ -461,17 +659,17 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
 
           // Main Core Tank
           ctx.fillStyle = currentTel.isStageSeparated ? '#94A3B8' : '#EA580C';
-          ctx.fillRect(-10, -14, 20, 38);
+          ctx.fillRect(-10, -14, 20, 40);
 
-          // NASA Worm / Artemis Decal
+          // NASA Worm / Artemis Decal Ring
           ctx.fillStyle = '#FFFFFF';
           ctx.fillRect(-10, 0, 20, 5);
 
-          // Strapped Side Boosters (only if not yet separated)
+          // Strapped Side Boosters (Stage 1)
           if (!currentTel.isStageSeparated) {
             ctx.fillStyle = '#E2E8F0';
             // Left booster
-            ctx.fillRect(-17, -8, 6, 36);
+            ctx.fillRect(-17, -8, 6, 38);
             ctx.beginPath();
             ctx.moveTo(-14, -16);
             ctx.lineTo(-11, -8);
@@ -480,7 +678,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.fill();
 
             // Right booster
-            ctx.fillRect(11, -8, 6, 36);
+            ctx.fillRect(11, -8, 6, 38);
             ctx.beginPath();
             ctx.moveTo(14, -16);
             ctx.lineTo(17, -8);
@@ -489,29 +687,29 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             ctx.fill();
           }
 
-          // Aerodynamic Delta Fins
+          // Delta Fins
           ctx.fillStyle = '#334155';
           ctx.beginPath();
-          ctx.moveTo(-10, 14);
-          ctx.lineTo(-18, 26);
-          ctx.lineTo(-10, 24);
+          ctx.moveTo(-10, 16);
+          ctx.lineTo(-19, 28);
+          ctx.lineTo(-10, 26);
           ctx.closePath();
           ctx.fill();
 
           ctx.beginPath();
-          ctx.moveTo(10, 14);
-          ctx.lineTo(18, 26);
-          ctx.lineTo(10, 24);
+          ctx.moveTo(10, 16);
+          ctx.lineTo(19, 28);
+          ctx.lineTo(10, 26);
           ctx.closePath();
           ctx.fill();
 
           // Engine Bell Nozzle
           ctx.fillStyle = '#1E293B';
           ctx.beginPath();
-          ctx.moveTo(-7, 24);
-          ctx.lineTo(7, 24);
-          ctx.lineTo(11, 32);
-          ctx.lineTo(-11, 32);
+          ctx.moveTo(-7, 26);
+          ctx.lineTo(7, 26);
+          ctx.lineTo(11, 34);
+          ctx.lineTo(-11, 34);
           ctx.closePath();
           ctx.fill();
 
@@ -525,16 +723,15 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
 
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isSimulating, isFinished, beacons]);
+  }, [isSimulating, isFinished, capsule, tank, engine]);
 
   const handleFinishDebrief = () => {
-    // 3-Star scoring calculation
     const altRatio = Math.min(1.0, telemetry.altitudeM / 140000);
     const velRatio = Math.min(1.0, telemetry.velocityMps / 7200);
     const corridorScoreRatio = Math.min(1.0, telemetry.corridorScore / 300);
-    const starScore = telemetry.starsCollected * 10;
+    const starScore = (telemetry.starsCollected || scoreStars) * 10;
 
-    const finalSimScore = Math.round((altRatio * 35 + velRatio * 35 + corridorScoreRatio * 20 + starScore));
+    const finalSimScore = Math.round(altRatio * 35 + velRatio * 35 + corridorScoreRatio * 20 + starScore);
     onComplete(Math.max(40, Math.min(100, finalSimScore)));
   };
 
@@ -542,9 +739,9 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
   const s2Percent = (telemetry.stage2FuelKg / (tank.fuelKg * 0.35)) * 100;
 
   return (
-    <div className="bg-space-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6">
+    <div className="bg-[#12153f]/90 border border-[#2e336d]/70 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl space-y-6 animate-fadeIn">
       {/* Simulation Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#2e336d]/60">
         <div>
           <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
             <Flame className="w-4 h-4 fill-amber-400" />
@@ -556,9 +753,9 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/40 rounded-full text-xs font-mono font-bold flex items-center gap-1">
+          <div className="px-3.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/40 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Stars: {telemetry.starsCollected} / 8</span>
+            <span>Stars: {scoreStars || telemetry.starsCollected} / 8</span>
           </div>
 
           {telemetry.altitudeM > 100000 && (
@@ -570,28 +767,28 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
       </div>
 
       {/* Viewport and Flight Instrument Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main Canvas Viewport (8 cols) */}
-        <div className="lg:col-span-8 relative rounded-3xl overflow-hidden border-2 border-slate-700 bg-space-950 shadow-inner flex flex-col justify-center items-center">
+        <div className="lg:col-span-8 relative w-full aspect-[16/10] max-h-[480px] rounded-3xl overflow-hidden border-2 border-slate-700/80 bg-space-950 shadow-inner flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={720}
-            height={460}
-            className="w-full h-[360px] sm:h-[430px] object-cover"
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            className="w-full h-full object-contain block"
           />
 
           {/* On-Screen Steering & Staging Controls (Direct Arcade Buttons) */}
           {isSimulating && !isFinished && (
-            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between pointer-events-auto">
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto gap-2">
               {/* Steer Left Button */}
               <button
-                onMouseDown={() => setSteerInput(-1)}
-                onMouseUp={() => setSteerInput(0)}
-                onTouchStart={() => setSteerInput(-1)}
-                onTouchEnd={() => setSteerInput(0)}
-                className="p-3.5 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
+                onMouseDown={() => { steerRef.current = -1; }}
+                onMouseUp={() => { steerRef.current = 0; }}
+                onTouchStart={() => { steerRef.current = -1; }}
+                onTouchEnd={() => { steerRef.current = 0; }}
+                className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">PITCH UP [A]</span>
               </button>
 
@@ -599,61 +796,61 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
               {telemetry.isStage1BurnedOut && !telemetry.isStageSeparated ? (
                 <button
                   onClick={triggerStageSeparation}
-                  className="px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-black rounded-2xl border-2 border-yellow-300 animate-bounce shadow-xl flex items-center gap-2 select-none cursor-pointer"
+                  className="px-4 py-2.5 sm:px-5 sm:py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-black rounded-2xl border-2 border-yellow-300 animate-bounce shadow-xl flex items-center gap-2 select-none cursor-pointer text-xs sm:text-sm"
                 >
-                  <Zap className="w-5 h-5 fill-current" />
+                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                   <span>DETACH BOOSTERS (SPACE)</span>
                 </button>
               ) : (
-                <div className="text-[11px] font-mono text-slate-400 bg-black/60 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-slate-800">
-                  Use [A] / [D] or Arrow Keys to steer into green corridor
+                <div className="text-[10px] sm:text-[11px] font-mono text-slate-300 bg-black/70 px-3 py-1.5 rounded-xl backdrop-blur-md border border-slate-700/80 text-center">
+                  Use <span className="text-amber-300 font-bold">[A]</span> / <span className="text-amber-300 font-bold">[D]</span> or Arrow Keys to steer into green corridor
                 </div>
               )}
 
               {/* Steer Right Button */}
               <button
-                onMouseDown={() => setSteerInput(1)}
-                onMouseUp={() => setSteerInput(0)}
-                onTouchStart={() => setSteerInput(1)}
-                onTouchEnd={() => setSteerInput(0)}
-                className="p-3.5 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
+                onMouseDown={() => { steerRef.current = 1; }}
+                onMouseUp={() => { steerRef.current = 0; }}
+                onTouchStart={() => { steerRef.current = 1; }}
+                onTouchEnd={() => { steerRef.current = 0; }}
+                className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-space-900/90 hover:bg-space-800 text-sky-400 rounded-2xl border border-sky-500/40 active:scale-95 transition-all shadow-lg backdrop-blur-md flex items-center gap-1.5 font-mono text-xs font-bold select-none cursor-pointer"
               >
                 <span className="hidden sm:inline">PITCH RIGHT [D]</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           )}
 
           {/* Countdown Overlay */}
           {countdown !== null && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white backdrop-blur-sm z-20">
+            <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-white backdrop-blur-sm z-20">
               <div className="text-xs font-mono uppercase tracking-widest text-sky-400 mb-2">
                 MAIN PROPULSION T-MINUS
               </div>
-              <div className="text-8xl font-black font-display text-amber-400 animate-ping">
-                {countdown === 0 ? "LIFTOFF" : countdown}
+              <div className="text-7xl sm:text-8xl font-black font-display text-amber-400 animate-ping">
+                {countdown === 0 ? 'LIFTOFF' : countdown}
               </div>
-              <p className="text-xs text-slate-300 mt-4">Get ready to steer into the green flight corridor!</p>
+              <p className="text-xs text-slate-300 mt-4">Steer with [A] and [D] into the green corridor ring!</p>
             </div>
           )}
 
           {/* End Simulation Modal Overlay */}
           {isFinished && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
               {success ? (
                 <div className="space-y-4 max-w-md animate-fadeIn">
-                  <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center mx-auto text-3xl">
+                  <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-emerald-500/20">
                     ⭐
                   </div>
                   <h4 className="text-2xl font-black text-white font-display">
                     ORBITAL INSERTION ACHIEVED!
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Cadet reached {(telemetry.altitudeM / 1000).toFixed(0)} km apogee at {(telemetry.velocityMps).toFixed(0)} m/s! You gathered {telemetry.starsCollected} telemetry stars and maintained perfect flight path alignment.
+                    Cadet reached {(telemetry.altitudeM / 1000).toFixed(0)} km apogee at {telemetry.velocityMps.toFixed(0)} m/s! You gathered {scoreStars || telemetry.starsCollected} telemetry stars and maintained flight path alignment.
                   </p>
                   <Button
                     onClick={handleFinishDebrief}
-                    variant="accent"
+                    variant="bean"
                     size="lg"
                     icon={<ArrowRight className="w-5 h-5" />}
                   >
@@ -662,21 +859,21 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
                 </div>
               ) : (
                 <div className="space-y-4 max-w-md animate-fadeIn">
-                  <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center mx-auto text-3xl">
+                  <div className="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center mx-auto text-3xl shadow-lg shadow-amber-500/20">
                     🪂
                   </div>
                   <h4 className="text-2xl font-black text-white font-display">
                     SUB-ORBITAL OCEAN SPLASHDOWN
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    The capsule deployed parachutes and splashed down safely! Altitude reached: {(telemetry.altitudeM / 1000).toFixed(0)} km. To reach circular orbit, steer into the green corridor and separate Stage 1 boosters when empty!
+                    The capsule deployed parachutes and splashed down safely! Altitude reached: {(telemetry.altitudeM / 1000).toFixed(0)} km. Steer into the green corridor reticle and separate Stage 1 boosters when empty to reach orbit!
                   </p>
-                  <div className="flex gap-2 justify-center">
-                    <Button onClick={onRestart} variant="secondary" icon={<RotateCcw className="w-4 h-4" />}>
+                  <div className="flex gap-3 justify-center">
+                    <Button onClick={handleFlyAgain} variant="bean" icon={<RotateCcw className="w-4 h-4" />}>
                       Fly Again
                     </Button>
-                    <Button onClick={handleFinishDebrief} variant="primary">
-                      Take Quiz Anyway
+                    <Button onClick={onRestart} variant="secondary">
+                      Change Booster Build
                     </Button>
                   </div>
                 </div>
@@ -687,7 +884,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
 
         {/* Real-Time Flight Gauges (4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-space-900 border border-slate-800 rounded-3xl p-5 space-y-4">
+          <div className="bg-[#0e1030]/90 border border-[#2e336d]/70 rounded-3xl p-5 space-y-4 backdrop-blur-xl">
             <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center justify-between">
               <span>Flight Telemetry</span>
               <span className={`text-[11px] font-bold ${telemetry.inCorridor ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -696,7 +893,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             </h4>
 
             {/* Altitude Gauge */}
-            <div className="p-3 bg-space-950 rounded-2xl border border-slate-800">
+            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
               <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
                 <span>ALTITUDE</span>
                 <span className="text-sky-300 font-bold">ORBIT: 140 km</span>
@@ -714,7 +911,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             </div>
 
             {/* Velocity & Mach Number */}
-            <div className="p-3 bg-space-950 rounded-2xl border border-slate-800">
+            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
               <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
                 <span>VELOCITY</span>
                 <span className="text-emerald-400 font-bold">
@@ -728,7 +925,7 @@ export const LaunchSimScene: React.FC<LaunchSimSceneProps> = ({ config, onComple
             </div>
 
             {/* Pitch Angle Indicator */}
-            <div className="p-3 bg-space-950 rounded-2xl border border-slate-800">
+            <div className="p-3 bg-[#0a0b2e]/90 rounded-2xl border border-slate-800">
               <div className="flex justify-between text-xs text-slate-400 font-mono mb-1">
                 <span>PITCH ANGLE</span>
                 <span className="text-sky-400 font-bold">IDEAL: {getIdealPitch(telemetry.altitudeM).toFixed(0)}°</span>
